@@ -1,3 +1,11 @@
+# GENERATE TIME: Wed Sep  3 14:44:23 2025
+# CMD:
+# src/main.py -opt experiments/det/034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs/options/det/034_DDSFeat_SR4IR_swinir_x4.yml --test_only --visualize
+
+# GENERATE TIME: Wed Aug 20 10:37:29 2025
+# CMD:
+# src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml
+
 # GENERATE TIME: Thu Aug 14 22:19:21 2025
 # CMD:
 # src/main.py -opt options/det/034_DDSFeat2_SR4IR_swinir_x4.yml
