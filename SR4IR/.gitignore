@@ -1,0 +1,19 @@
+# large memory files
+experiments/det_tests
+tb_loggers
+datasets
+wandb/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.swp
+
+# files for experiments
+scripts
+rm_archives.sh
+images.txt
+experiments/pretrained_models/
+experiments/det/034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs/checkpoints/checkpoint_latest.pth
+experiments/det/034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs/models/net_det_latest.pth
+experiments/det/034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs/models/net_sr_latest.pth

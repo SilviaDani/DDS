@@ -1,0 +1,125 @@
+# GENERATE TIME: Wed Aug 20 10:37:29 2025
+# CMD:
+# src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml
+
+# GENERATE TIME: Thu Aug 14 22:19:21 2025
+# CMD:
+# src/main.py -opt options/det/034_DDSFeat2_SR4IR_swinir_x4.yml
+
+# GENERATE TIME: Thu Jul 17 17:21:30 2025
+# CMD:
+# src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml
+
+# GENERATE TIME: Wed Jun 18 17:56:22 2025
+# CMD:
+# src/main.py -opt options/det/034_DDS_YOLO_lr_SR4IR_swinir_x4.yml
+
+name: 034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs
+model_type: sr4ir_det
+num_threads: 16
+print_freq: 100  # unit: iter
+manual_seed: 100
+scale: 4
+deterministic: true
+# test_only: true
+
+# data and augmentation
+data:
+  path: datasets/VOC_COCO
+  format: coco
+  aspect_ratio_group_factor : 3
+  data_augmentation:
+    - hflip
+    - photometric
+    - scale_jitter
+    - iou_crop
+    - zoomout
+    - shortest_size
+  is_voc: true
+
+# network specs
+network_sr:
+  name: swinir
+  upscale: 4
+  in_chans: 3
+  img_size: 48
+  window_size: 8
+  img_range: 1.
+  depths: [6, 6, 6, 6, 6, 6]
+  embed_dim: 180
+  num_heads: [6, 6, 6, 6, 6, 6]
+  mlp_ratio: 2
+  upsampler: 'pixelshuffle'
+  resi_connection: '1conv'
+network_det:
+  name: fasterrcnn_mobilenet_v3_large_fpn
+  weights_backbone: MobileNet_V3_Large_Weights.IMAGENET1K_V1
+  num_classes: 21
+# path for pretrained model
+path:
+  network_sr: experiments/pretrained_models/001_classicalSR_DIV2K_s48w8_SwinIR-M_x4.pth
+  network_sr_key: params
+  network_seg: ~
+# training config
+train:  
+  batch_size: 1
+  #batch_size: 2  # 8 GPU
+  epoch: 300
+  save_freq: 5  # unit: epoch
+  eval_freq: 5
+  warmup_epoch: 10
+
+  # optimizer
+  optim_sr:
+    type: AdamW
+    lr: !!float 1e-4
+    weight_decay: 0
+    betas: [0.9, 0.999]
+  optim_det:
+    type: SGD
+    lr: !!float 1e-3
+    momentum: 0.9
+    weight_decay: !!float 1e-5
+
+  # scheduler
+  scheduler_sr:
+    type: CosineAnnealingRestartLR
+    periods: [10, 290]  # 10 for warmup
+    restart_weights: [1, 1]
+    eta_min: !!float 1e-6
+  scheduler_det:
+    type: CosineAnnealingRestartLR
+    periods: [10, 290]  # 10 for warmup
+    restart_weights: [1, 1]
+    eta_min: !!float 1e-6
+
+  # phase 1 losses
+  pixel_opt:
+    type: L1Loss
+    loss_weight: !!float 1.0
+    reduction: mean
+  tdp_opt:
+    type: DDSLoss
+    loss_weight: !!float 0.1
+    model_path: "../DetectionDegradationScore/checkpoints/attemptSR_30bins_point8_02_coco17complete_320p_sr_subsamp_444/best_model.pt"
+    backbone: Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
+    device: "cuda"
+
+  # phase 2 losses
+  det_sr_opt:
+    type: DETLoss
+    loss_weight: !!float 0.34
+  det_hr_opt:
+    type: DETLoss
+    loss_weight: !!float 0.34
+  det_cqmix_opt:
+    type: DETLoss
+    loss_weight: !!float 0.34
+
+# testing config
+test:  
+  batch_size: 1
+  calculate_lpips: True
+
+# DDP setting
+dist_url: env:://
