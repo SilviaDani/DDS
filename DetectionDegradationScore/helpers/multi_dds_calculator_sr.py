@@ -120,10 +120,13 @@ def main():
     GPU_ID = 0
     device = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
     DATA_ROOT = "unbalanced_dataset_sr"
-    ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    #ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    ATTEMPT = "01_flir_sr"
     OUTPUT_ROOT = f"ddscores_analysis/mapping/{ATTEMPT}"
     BATCH_SIZE = 210
-    MODEL_PATH = "../yolo11m.pt"  # Adjust to your YOLO model path
+    YOLO_11 = "yolo11m.pt"
+    YOLO_11_THERMAL = "yolo11m_thermal.pt" # Finetuned thermal model
+    MODEL_PATH = "../" + YOLO_11_THERMAL  # Adjust to your YOLO model path
     TRY_RUN = False
 
     timestamp = get_timestamp_dir()
