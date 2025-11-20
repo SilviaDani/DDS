@@ -225,7 +225,7 @@ class DatasetValidator:
     def __init__(self, balanced_path: Path, split_info: Dict):
         self.balanced_path = balanced_path
         self.split_info = split_info
-
+    
     def validate_split(self, split: str) -> List[str]:
         """
         Validate a specific split and return any missing files
@@ -237,13 +237,11 @@ class DatasetValidator:
         expected_images = set(self.split_info[split].keys())
 
         # Check extracted folder
-        extracted_images = set(f.name for f in (split_path / "extracted").glob("*.jpg"))
+        extracted_images = get_images_in_folder(split_path / "extracted")
         missing_extracted = expected_images - extracted_images
 
         # Check compressed folder
-        compressed_images = set(
-            f.name for f in (split_path / "compressed").glob("*.jpg")
-        )
+        compressed_images = get_images_in_folder(split_path / "compressed")
         missing_compressed = expected_images - compressed_images
 
         # Combine missing files
@@ -401,9 +399,17 @@ class DatasetOrganizer:
 
             print(f"Created ddscores.json for {split} with {len(ddscores)} items")
 
+# Support multiple image extensions
+def get_images_in_folder(folder: Path):
+    exts = ["*.jpg", "*.jpeg", "*.png"]
+    files = []
+    for ext in exts:
+        files.extend(folder.glob(ext))
+    return set(f.name for f in files)
 
 if __name__ == "__main__":
-    ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    #ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    ATTEMPT = "01_flir_sr"
     BASE_DIR = f"ddscores_analysis/mapping/{ATTEMPT}"
     UNBALANCED_DIR = "unbalanced_dataset_sr"
     BALANCED_DIR = "balanced_dataset_sr"
