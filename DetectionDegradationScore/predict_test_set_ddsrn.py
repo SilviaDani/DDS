@@ -309,11 +309,17 @@ def main():
     ATTEMPT = 38
     DIR = "40bins_point8_07_coco17complete_320p_qual_20_25_30_35_40_45_50_subsamp_444"
     TRIAL = f"attempt{ATTEMPT}_{DIR}"
-    MODEL_PATH = f"checkpoints/{TRIAL}/best_model.pt"
-    IMGS_ROOT = "balanced_dataset_coco2017"
-    DDSCORES_ROOT = "balanced_dataset_coco2017"
-    OUTPUT_PATH = f"checkpoints/{TRIAL}/test_predictions.json"
-    BACKBONE = Backbone.YOLO_V11_M
+    #MODEL_PATH = f"checkpoints/{TRIAL}/best_model.pt"
+    #IMGS_ROOT = "balanced_dataset_coco2017"
+    #DDSCORES_ROOT = "balanced_dataset_coco2017"
+    #OUTPUT_PATH = f"checkpoints/{TRIAL}/test_predictions.json"
+    TEST = "thermal" #"RGB"
+    MODEL_PATH = f"checkpoints/{TEST}_best_model.pt"
+    IMGS_ROOT = "balanced_dataset_sr"
+    DDSCORES_ROOT = "balanced_dataset_sr"
+    OUTPUT_PATH = f"checkpoints/{TEST}_test_predictions.json"
+    #BACKBONE = Backbone.YOLO_V11_M
+    BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
 
     # Benchmarking flag
     ENABLE_BENCH_TIME = True
