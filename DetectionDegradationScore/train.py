@@ -396,11 +396,14 @@ def main(args):
     ATTEMPT_NAME = ATTEMPT + f"_lr{LEARNING_RATE}"
     #DIR = "02_coco17complete_320p_sr_subsamp_444"
     DIR = args.dir
-    CHECKPOINT_DIR = args.checkpoint_dir if args.checkpoint_dir is not None else f"checkpoints/attempt{ATTEMPT_NAME}_30bins_point8_{DIR}"
+    BINS = args.n_bins
+    MAX_SCORE = args.max_score
+    CHECKPOINT_DIR = args.checkpoint_dir if args.checkpoint_dir is not None else f"checkpoints/attempt{ATTEMPT_NAME}_{BINS}bins_{MAX_SCORE}_{DIR}"
     TRY_RUN = args.try_run
     USE_ONLINE_WANDB = args.use_online_wandb
     #BACKBONE = Backbone.YOLO_V11_M
     BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN if args.backbone == "fasterrcnn_mobilenet_v3_large_fpn" else Backbone.YOLO_V11_M
+    print(f"Using backbone: {BACKBONE}")
 
     from dataloader import create_dataloaders
 
@@ -449,6 +452,9 @@ if __name__ == "__main__":
     parser.add_argument("--backbone", type=str, default="fasterrcnn_mobilenet_v3_large_fpn", help="Backbone model name")
     parser.add_argument("--checkpoint_dir", type=str, default=None, help="Directory to save checkpoints")
     parser.add_argument("--load_checkpoint", type=str, default=None, help="Path to load checkpoint from")
+    # n_bins and max_score used for dataset balancing, used only for naming the checkpoint directory
+    parser.add_argument("--n_bins", type=int, default=30, help="Number of bins used for dataset balancing")
+    parser.add_argument("--max_score", type=float, default=0.8, help="Maximum score used for dataset balancing")
     args = parser.parse_args()
     main(args)
     
