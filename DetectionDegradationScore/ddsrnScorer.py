@@ -23,7 +23,7 @@ class ddsrnScorer(torch.nn.Module):
             layer_indices=backbone.config.indices,
         ).to(device).eval()
 
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
         self.ddsrn.load_state_dict(checkpoint["model_state_dict"])
         self.ddsrn.eval()
 
@@ -101,7 +101,7 @@ class ddsrnFeatScorer(torch.nn.Module):
             layer_indices=backbone.config.indices,
         ).to(device).eval()
 
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
         self.ddsrn.load_state_dict(checkpoint["model_state_dict"])
         self.ddsrn.eval()
 
@@ -143,7 +143,7 @@ class ddsrnFeatScorer_FasterRCNN(torch.nn.Module):
             layer_indices=backbone.config.indices,
         ).to(device).eval()
 
-        checkpoint = torch.load(model_path, map_location=device)
+        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
         self.ddsrn.load_state_dict(checkpoint["model_state_dict"])
         self.ddsrn.eval()
 

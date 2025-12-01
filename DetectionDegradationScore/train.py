@@ -9,14 +9,13 @@ import wandb
 from typing import Dict, Optional
 import os
 from itertools import islice
+from scipy.stats import pearsonr  # Add this import
 
 from ddsrn import create_ddsrn_model
 from extractor import load_feature_extractor, FeatureExtractor
 from backbones import Backbone
 from utils.bin_distribution_visualizer import BinDistributionVisualizer
 
-
-from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn
 
 class Trainer:
     """
@@ -136,6 +135,7 @@ class Trainer:
         self.model.train()
         running_loss = 0.0
         all_preds = []
+        all_targets = []  # Add this to collect ground truth scores
 
         # Determine number of batches to run
         num_batches = 50 if self.try_run else len(self.train_loader)
@@ -159,8 +159,9 @@ class Trainer:
             # Forward pass
             predictions = self.model(gt_features, mod_features).squeeze()
 
-            # Store predictions for analysis
+            # Store predictions and targets for analysis
             all_preds.extend(predictions.detach().cpu().numpy())
+            all_targets.extend(scores.detach().cpu().numpy())  # Collect ground truth
 
             # Calculate loss
             loss = self.loss(predictions, scores)
@@ -176,6 +177,9 @@ class Trainer:
             # Update metrics
             running_loss += loss.item()
 
+        # Calculate Pearson correlation
+        train_correlation, _ = pearsonr(all_preds, all_targets)
+
         visualizer = BinDistributionVisualizer(n_bins=40, max_score=0.8)
         visualizer.visualize(
             predictions=all_preds,
@@ -187,12 +191,18 @@ class Trainer:
         wandb.log(
             {
                 "train_predictions_dist": wandb.Histogram(all_preds),
+                "train_correlation": train_correlation,  # Add correlation to wandb
             }
         )
 
         print(f"Train loss: {(running_loss / num_batches):.6f}")
+        print(f"Train Pearson correlation: {train_correlation:.6f}")
+        
         # Calculate epoch metrics
-        return {"train_loss": running_loss / num_batches}
+        return {
+            "train_loss": running_loss / num_batches,
+            "train_correlation": train_correlation,  # Return for potential use
+        }
 
     @torch.no_grad()
     def validate(self, current_epoch, val_log_file) -> Dict[str, float]:
@@ -239,6 +249,9 @@ class Trainer:
             all_preds.extend(predictions.cpu().numpy())
             all_targets.extend(scores.cpu().numpy())
 
+        # Calculate Pearson correlation
+        val_correlation, _ = pearsonr(all_preds, all_targets)
+
         visualizer = BinDistributionVisualizer(n_bins=40, max_score=0.8)
         visualizer.visualize(
             predictions=all_preds,
@@ -248,17 +261,20 @@ class Trainer:
         )
 
         print(f"Val loss: {(running_loss / num_batches):.6f}")
+        print(f"Val Pearson correlation: {val_correlation:.6f}")
 
         # Calculate metrics
         metrics = {
             "val_loss": running_loss / num_batches,
             "val_mean_pred": np.mean(all_preds),
             "val_std_pred": np.std(all_preds),
+            "val_correlation": val_correlation,  # Add correlation to metrics
         }
 
         wandb.log(
             {
                 "predictions_dist": wandb.Histogram(all_preds),
+                "val_correlation": val_correlation,  # Add correlation to wandb
             }
         )
 
@@ -373,17 +389,16 @@ def main():
     # Configuration
     GPU_ID = 0
     DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
-    DDSCORES_ROOT = "balanced_dataset_sr"
+    DDSCORES_ROOT = "balanced_dataset_coco17_distorted"
     BATCH_SIZE = 128
     NUM_EPOCHS = 50
     LEARNING_RATE = 1e-3
-    ATTEMPT = "SR"
-    DIR = "02_coco17complete_320p_sr_subsamp_444"
-    CHECKPOINT_DIR = f"checkpoints/attempt{ATTEMPT}_30bins_point8_{DIR}"
+    ATTEMPT = "ARNIQA_YOLO"
+    DIR = "01_coco17_distorted_full_320p_subsamp_444"
+    CHECKPOINT_DIR = f"checkpoints/attempt{ATTEMPT}_1bins_1point_{DIR}"
     TRY_RUN = False
     USE_ONLINE_WANDB = True
-    #BACKBONE = Backbone.YOLO_V11_M
-    BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
+    BACKBONE = Backbone.YOLO_V11_M
 
     from dataloader import create_dataloaders
 

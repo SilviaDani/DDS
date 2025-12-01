@@ -306,14 +306,14 @@ def main():
     # Configuration
     GPU_ID = 0
     DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
-    ATTEMPT = 38
-    DIR = "40bins_point8_07_coco17complete_320p_qual_20_25_30_35_40_45_50_subsamp_444"
+    ATTEMPT = "DistortedAllFASTERRCNN_MOBILENET_V3_LARGE_FPN"
+    DIR = "1bins_1point_01_coco17_distorted_full_320p_subsamp_444"
     TRIAL = f"attempt{ATTEMPT}_{DIR}"
     MODEL_PATH = f"checkpoints/{TRIAL}/best_model.pt"
-    IMGS_ROOT = "balanced_dataset_coco2017"
-    DDSCORES_ROOT = "balanced_dataset_coco2017"
+    IMGS_ROOT = "balanced_dataset_coco17_distorted"
+    DDSCORES_ROOT = "balanced_dataset_coco17_distorted"
     OUTPUT_PATH = f"checkpoints/{TRIAL}/test_predictions.json"
-    BACKBONE = Backbone.YOLO_V11_M
+    BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
 
     # Benchmarking flag
     ENABLE_BENCH_TIME = True

@@ -4,11 +4,10 @@ from matplotlib import cm
 
 # Dati completi
 all_models = [
-    "Yolo11m (1.03M)",
-    "Yolo11m-Light (0.31M)",
-    "VGG16 (1.03M)",
-    "EfficientNetV2M (0.86M)",
-    "EfficientNetV2M-Light (0.27M)",
+    "Yolo11m (0.31M)",
+    "VGG16 (0.55M)",
+    "EfficientNetV2M (0.40M)",
+    "FasterRCNN (0.20M)",
     "LPIPS-custom-train",
     "SSIM",
     "LPIPS",
@@ -23,44 +22,36 @@ color_map = {
 
 # Dati per MAE
 mae_models = [
-    "Yolo11m (1.03M)",
-    "Yolo11m-Light (0.31M)",
-    "VGG16 (1.03M)",
-    "EfficientNetV2M (0.86M)",
-    "EfficientNetV2M-Light (0.27M)",
+    "Yolo11m (0.31M)",
+    "VGG16 (0.55M)",
+    "EfficientNetV2M (0.40M)",
+    "FasterRCNN (0.20M)",
     "LPIPS-custom-train",
-    "SSIM",
-    "LPIPS",
 ]
 mae_scores = [
-    0.1379,
-    0.1383,
-    0.1648,
-    0.1659,
-    0.1723,
+    0.1338,
+    0.1525,
+    0.1544,
+    0.1612,
     0.2199,  # Aggiornato
-    0.3039,  # Aggiornato
-    0.3580,  # Nuovo valore
 ]
 colors_mae = [color_map[model] for model in mae_models]
 
 # Dati per coefficienti Pearson
 pearson_models = [
-    "Yolo11m (1.03M)",
-    "Yolo11m-Light (0.31M)",
-    "VGG16 (1.03M)",
-    "EfficientNetV2M (0.86M)",
-    "EfficientNetV2M-Light (0.27M)",
+    "Yolo11m (0.31M)",
+    "VGG16 (0.55M)",
+    "EfficientNetV2M (0.40M)",
+    "FasterRCNN (0.20M)",
     "LPIPS-custom-train",
     "SSIM",
     "LPIPS",
 ]
 pearson_corr = [
-    0.6509,
-    0.6465,
-    0.5018,
-    0.4851,
-    0.4441,
+    0.6999,
+    0.6184,
+    0.6217,
+    0.5944,
     0.1389,  # Aggiornato
     0.0205,  # Aggiornato
     0.0637,  # Nuovo valore
@@ -69,20 +60,18 @@ colors_pearson = [color_map[model] for model in pearson_models]
 
 # Dati per images/sec
 speed_models = [
-    "Yolo11m (1.03M)",
-    "Yolo11m-Light (0.31M)",
-    "VGG16 (1.03M)",
-    "EfficientNetV2M (0.86M)",
-    "EfficientNetV2M-Light (0.27M)",
+    "Yolo11m (0.31M)",
+    "VGG16 (0.55M)",
+    "EfficientNetV2M (0.40M)",
+    "FasterRCNN (0.20M)",
     "DDS-Yolo11m-CPU",
 ]
 images_per_sec = [
-    203.71,
-    218.59,
-    268.04,
-    243.73,
-    246.20,
-    72.31,
+    582.46,
+    600.96,
+    661.16,
+    3324.55,
+    395.32
 ]
 colors_speed = [color_map[model] for model in speed_models]
 
@@ -119,18 +108,16 @@ plt.close()
 # 4. INFERENCE TIME GRAPH
 # Calcolare tempo di inferenza in millisecondi dai dati images/second
 inference_models = [
-    "Yolo11m (1.03M)",
-    "Yolo11m-Light (0.31M)",
-    "VGG16 (1.03M)",
-    "EfficientNetV2M (0.86M)",
-    "EfficientNetV2M-Light (0.27M)",
+    "Yolo11m (0.31M)",
+    "VGG16 (0.55M)",
+    "EfficientNetV2M (0.40M)",
+    "FasterRCNN (0.20M)",
 ]
 inference_speeds = [
-    203.71,
-    218.59,
-    268.04,
-    243.73,
-    246.20,
+    582.46,
+    600.96,
+    661.16,
+    3324.55,
 ]
 # Convertire in millisecondi (1000 / img_per_sec)
 inference_time_ms = [1000 / ips for ips in inference_speeds]

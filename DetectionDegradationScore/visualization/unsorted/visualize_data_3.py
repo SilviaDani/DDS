@@ -126,7 +126,7 @@ def create_calibration_curve(
 
 
 if __name__ == "__main__":
-    ATTEMPT = 28
+    ATTEMPT = 38
     CHECKPOINT_DIR = f"checkpoints/attempt{ATTEMPT}_40bins_point8_07_coco17complete_320p_qual_20_25_30_35_40_45_50_subsamp_444"
     JSON_FILE = "test_predictions.json"
     WITH_ERRORS = False

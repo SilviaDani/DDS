@@ -192,27 +192,34 @@ class FasterRCNNMobileNetV3LargeFPNFeatureExtractor(FeatureExtractor):
         super().__init__()
         self._load_model()
         self.layer_indices = self._get_layers_to_extract()
-        # For FPN, layer indices are the keys ['0', '1', '2', '3']
-        self._register_hooks()
+        # No need to register hooks since we'll override forward method
 
     def _load_model(self):
         """Loads the FasterRCNN backbone."""
         self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT).backbone
         self.model.eval()
 
-    def _get_layers_to_extract(self) -> List[int]:
+    def _get_layers_to_extract(self) -> List[str]:
         """
-        FPN outputs keys are strings ('0', '1', 'pool')
+        FPN outputs keys are strings ('0', '1', '2', '3', 'pool')
+        We'll use the first 4 feature pyramid levels
         """
-        return []  # Not using internal hooks since FPN outputs are directly accessible
+        return ['0', '1', '2', '3']
 
     @torch.no_grad()
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Return the FPN feature maps.
+        Override forward method for FPN backbone which returns a dict with string keys.
         """
-        return self.model(x)
-
+        self.extracted_features = {}
+        features = self.model(x)
+        
+        # Extract only the layers we want
+        for layer_key in self.layer_indices:
+            if layer_key in features:
+                self.extracted_features[layer_key] = features[layer_key]
+        
+        return self.extracted_features
 
 def load_feature_extractor(
     backbone_name: Backbone,

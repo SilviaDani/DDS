@@ -1,0 +1,12 @@
+ultralytics
+#python==3.11.14
+lpips
+numpy==1.26.4
+filetype
+tqdm
+imagecorruptions
+matplotlib
+"scikit-image<0.19"
+pycocotools==2.0.6
+pandas
+seaborn

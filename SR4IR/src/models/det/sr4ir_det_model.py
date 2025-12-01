@@ -12,7 +12,6 @@ from .base_model import BaseModel
 
 import math
 
-
 def make_model(opt):
     return SR4IRDetectionModel(opt)
 
@@ -117,8 +116,8 @@ class SR4IRDetectionModel(BaseModel):
                 aux_shape = g_aux.shape
                 
                 # Flatten gradients to compute similarity
-                g_main_flat = g_main.view(-1)
-                g_aux_flat = g_aux.view(-1)
+                g_main_flat = g_main.contiguous().view(-1)
+                g_aux_flat = g_aux.contiguous().view(-1)
                 
                 # Compute cosine similarity
                 cos_sim = torch.cosine_similarity(
@@ -133,7 +132,7 @@ class SR4IRDetectionModel(BaseModel):
                     combined = g_main_flat + g_aux_flat
                 
                 # Reshape back to original dimensions before assignment
-                param.grad = combined.view(main_shape)
+                param.grad = combined.contiguous().view(main_shape)
             elif g_main is not None:
                 param.grad = g_main  # Only main gradient exists
                 

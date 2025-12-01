@@ -75,7 +75,7 @@ def calculate_statistics(predictions, targets):
 
 def main():
     # Configurazione
-    base_dir = "balanced_dataset_coco2017/test"
+    base_dir = "realistic_distorted_dataset/test"
     extracted_dir = os.path.join(base_dir, "extracted")
     compressed_dir = os.path.join(base_dir, "compressed")
     error_scores_path = os.path.join(base_dir, "error_scores.json")

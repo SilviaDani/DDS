@@ -1,2 +1,19 @@
-VOC_test/
 yolo*.pt
+DetectionDegradationScore/VOC_C/
+DetectionDegradationScore/VOC2007_test/
+DetectionDegradationScore/progressive_distorted_dataset/
+DetectionDegradationScore/realistic_distorted_dataset/
+DetectionDegradationScore/COCO_adapted_annotations.json
+DetectionDegradationScore/COCO_results.json
+DetectionDegradationScore/VOC_adapted_annotations.json
+DetectionDegradationScore/VOC_results.json
+DetectionDegradationScore/COCO_C/
+DetectionDegradationScore/balanced_dataset_coco17_distorted/
+DetectionDegradationScore/for paper/
+DetectionDegradationScore/image_group_comparisons/
+DetectionDegradationScore/plots/
+DetectionDegradationScore/media/
+DetectionDegradationScore/create_distorted_dataset.py
+DetectionDegradationScore/checkpoints/
+DetectionDegradationScore/ddscores_analysis/
+VOC_test/

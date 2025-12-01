@@ -1,24 +1,4 @@
-# GENERATE TIME: Wed Sep  3 14:44:23 2025
-# CMD:
-# src/main.py -opt experiments/det/034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs/options/det/034_DDSFeat_SR4IR_swinir_x4.yml --test_only --visualize
-
-# GENERATE TIME: Wed Aug 20 10:37:29 2025
-# CMD:
-# src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml
-
-# GENERATE TIME: Thu Aug 14 22:19:21 2025
-# CMD:
-# src/main.py -opt options/det/034_DDSFeat2_SR4IR_swinir_x4.yml
-
-# GENERATE TIME: Thu Jul 17 17:21:30 2025
-# CMD:
-# src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml
-
-# GENERATE TIME: Wed Jun 18 17:56:22 2025
-# CMD:
-# src/main.py -opt options/det/034_DDS_YOLO_lr_SR4IR_swinir_x4.yml
-
-name: 034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs
+name: 034_DDSFeat_SR4IR_swinir_x4_ARNIQA_100epochs_10warmup_1
 model_type: sr4ir_det
 num_threads: 16
 print_freq: 100  # unit: iter
@@ -68,9 +48,9 @@ path:
 train:  
   batch_size: 1
   #batch_size: 2  # 8 GPU
-  epoch: 300
-  save_freq: 5  # unit: epoch
-  eval_freq: 5
+  epoch: 100
+  save_freq: 10  # unit: epoch
+  eval_freq: 10
   warmup_epoch: 10
 
   # optimizer
@@ -88,12 +68,12 @@ train:
   # scheduler
   scheduler_sr:
     type: CosineAnnealingRestartLR
-    periods: [10, 290]  # 10 for warmup
+    periods: [10, 90]  # 10 for warmup
     restart_weights: [1, 1]
     eta_min: !!float 1e-6
   scheduler_det:
     type: CosineAnnealingRestartLR
-    periods: [10, 290]  # 10 for warmup
+    periods: [10, 90]  # 10 for warmup
     restart_weights: [1, 1]
     eta_min: !!float 1e-6
 
@@ -104,8 +84,8 @@ train:
     reduction: mean
   tdp_opt:
     type: DDSLoss
-    loss_weight: !!float 0.1
-    model_path: "../DetectionDegradationScore/checkpoints/attemptSR_30bins_point8_02_coco17complete_320p_sr_subsamp_444/best_model.pt"
+    loss_weight: !!float 0.3
+    model_path: "../DetectionDegradationScore/checkpoints/attemptFASTERRCNN_seed_dynamic_distortions_sr25/best_model.pt"
     backbone: Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
     device: "cuda"
 

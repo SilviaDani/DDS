@@ -299,7 +299,7 @@ def main():
     GPU_ID = 0
     DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
     MODEL_PATH = "yolo11m.pt"
-    IMGS_ROOT = "balanced_dataset_coco2017"
+    IMGS_ROOT = "realistic_distorted_dataset"
     OUTPUT_PATH = "benchmarks/dds_benchmark_results.json"
     BATCH_SIZE = 128
     COMPRESSION_LEVEL = 40  # Choose one compression level
