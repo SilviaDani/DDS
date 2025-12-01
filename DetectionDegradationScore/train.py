@@ -9,7 +9,11 @@ import wandb
 from typing import Dict, Optional
 import os
 from itertools import islice
+<<<<<<< HEAD
 from scipy.stats import pearsonr  # Add this import
+=======
+import argparse
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0
 
 from ddsrn import create_ddsrn_model
 from extractor import load_feature_extractor, FeatureExtractor
@@ -312,6 +316,19 @@ class Trainer:
             torch.save(checkpoint, best_path)
             print(f"Saved best model to {best_path}")
 
+    def load_checkpoint(self, checkpoint_path: str) -> None:
+        """
+        Load model checkpoint.
+
+        Args:
+            checkpoint_path: Path to the checkpoint file
+        """
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        print(f"Loaded checkpoint from {checkpoint_path}, epoch {checkpoint['epoch']}")
+
     def train(
         self,
         num_epochs: int,
@@ -382,13 +399,14 @@ class Trainer:
         wandb.finish()
 
 
-def main():
+def main(args):
     """
     Main training script.
     """
     # Configuration
-    GPU_ID = 0
+    GPU_ID = args.gpu_id
     DEVICE = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
+<<<<<<< HEAD
     DDSCORES_ROOT = "balanced_dataset_coco17_distorted"
     BATCH_SIZE = 128
     NUM_EPOCHS = 50
@@ -399,6 +417,25 @@ def main():
     TRY_RUN = False
     USE_ONLINE_WANDB = True
     BACKBONE = Backbone.YOLO_V11_M
+=======
+    DDSCORES_ROOT = "balanced_dataset_sr"
+    BATCH_SIZE = args.batch_size
+    NUM_EPOCHS = args.num_epochs
+    LEARNING_RATE = args.learning_rate
+    ATTEMPT = args.attempt
+    # adding learning rate to attempt name
+    ATTEMPT_NAME = ATTEMPT + f"_lr{LEARNING_RATE}"
+    #DIR = "02_coco17complete_320p_sr_subsamp_444"
+    DIR = args.dir
+    BINS = args.n_bins
+    MAX_SCORE = args.max_score
+    CHECKPOINT_DIR = args.checkpoint_dir if args.checkpoint_dir is not None else f"checkpoints/attempt{ATTEMPT_NAME}_{BINS}bins_{MAX_SCORE}_{DIR}"
+    TRY_RUN = args.try_run
+    USE_ONLINE_WANDB = args.use_online_wandb
+    #BACKBONE = Backbone.YOLO_V11_M
+    BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN if args.backbone == "fasterrcnn_mobilenet_v3_large_fpn" else Backbone.YOLO_V11_M
+    print(f"Using backbone: {BACKBONE}")
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0
 
     from dataloader import create_dataloaders
 
@@ -426,8 +463,34 @@ def main():
         backbone_name=BACKBONE,
     )
 
+    # Load checkpoint if provided
+    if args.load_checkpoint is not None:
+        trainer.load_checkpoint(args.load_checkpoint)
+
     trainer.train(num_epochs=NUM_EPOCHS)
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     main()
+=======
+    # Parsing command line arguments and passing to main
+    parser = argparse.ArgumentParser(description="Train DDSRN model")
+    parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID to use for training")
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size for training")
+    parser.add_argument("--num_epochs", type=int, default=50, help="Number of epochs to train")
+    parser.add_argument("--learning_rate", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--attempt", type=str, default="Thermal_SR", help="Attempt name")
+    parser.add_argument("--dir", type=str, default="FLIR", help="Dataset directory")
+    parser.add_argument("--try_run", action="store_true", default=False, help="Run a quick test")
+    parser.add_argument("--use_online_wandb", action="store_true", default=True, help="Use online Weights & Biases logging")
+    parser.add_argument("--backbone", type=str, default="fasterrcnn_mobilenet_v3_large_fpn", help="Backbone model name")
+    parser.add_argument("--checkpoint_dir", type=str, default=None, help="Directory to save checkpoints")
+    parser.add_argument("--load_checkpoint", type=str, default=None, help="Path to load checkpoint from")
+    # n_bins and max_score used for dataset balancing, used only for naming the checkpoint directory
+    parser.add_argument("--n_bins", type=int, default=30, help="Number of bins used for dataset balancing")
+    parser.add_argument("--max_score", type=float, default=0.8, help="Maximum score used for dataset balancing")
+    args = parser.parse_args()
+    main(args)
+    
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0

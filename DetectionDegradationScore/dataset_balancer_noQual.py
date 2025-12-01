@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Dict
 import matplotlib.pyplot as plt
 from pathlib import Path
+import argparse
 
 
 class DatasetBalancer:
@@ -270,9 +271,36 @@ def validate_dataset(json_file, img_file, n_bins, max_score):
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD:DetectionDegradationScore/dataset_balancer_noQual.py
     N_BINS = 1 #40
     MAX_SCORE = 1.0 #0.8
     ATTEMPT = "01_coco17_distorted_full_320p_subsamp_444"
+=======
+    parser = argparse.ArgumentParser(description="Dataset Balancer")
+    parser.add_argument(
+        "--n_bins",
+        type=int,
+        default=30,
+        help="Number of bins to divide the scores into.",
+    )
+    parser.add_argument(
+        "--max_score",
+        type=float,
+        default=0.8,
+        help="Maximum score value for binning.",
+    )
+    parser.add_argument(
+        "--attempt",
+        type=str,
+        default="01_flir_sr",
+        help="Attempt identifier for the dataset.",
+    )
+    args = parser.parse_args()
+    N_BINS = args.n_bins
+    MAX_SCORE = args.max_score
+    #ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    ATTEMPT = args.attempt
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0:DetectionDegradationScore/dataset_balancer_sr.py
     BASE_DIR = f"ddscores_analysis/mapping/{ATTEMPT}"
     SPLITS = ["train", "val", "test"]
 

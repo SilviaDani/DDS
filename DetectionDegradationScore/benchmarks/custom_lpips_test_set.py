@@ -75,10 +75,16 @@ def calculate_statistics(predictions, targets):
 
 def main():
     # Configurazione
+<<<<<<< HEAD
     base_dir = "realistic_distorted_dataset/test"
+=======
+    #base_dir = "balanced_dataset_coco2017/test"
+    base_dir = "balanced_dataset_sr/test"
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0
     extracted_dir = os.path.join(base_dir, "extracted")
     compressed_dir = os.path.join(base_dir, "compressed")
-    error_scores_path = os.path.join(base_dir, "error_scores.json")
+    #error_scores_path = os.path.join(base_dir, "error_scores.json")
+    error_scores_path = os.path.join(base_dir, "ddscores.json")
     custom_model_path = (
         "../PerceptualSimilarity/checkpoints/vgg_custom1/latest_net_.pth"
     )

@@ -119,11 +119,19 @@ def get_timestamp_dir() -> str:
 def main():
     GPU_ID = 0
     device = torch.device(f"cuda:{GPU_ID}" if torch.cuda.is_available() else "cpu")
+<<<<<<< HEAD:DetectionDegradationScore/helpers/multi_dds_calculator_noQual.py
     DATA_ROOT = "realistic_distorted_dataset"
     ATTEMPT = "01_coco17_distorted_complete_320p_subsamp_444"
+=======
+    DATA_ROOT = "unbalanced_dataset_sr"
+    #ATTEMPT = "01_coco17complete_320p_sr_subsamp_444"
+    ATTEMPT = "01_flir_sr"
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0:DetectionDegradationScore/helpers/multi_dds_calculator_sr.py
     OUTPUT_ROOT = f"ddscores_analysis/mapping/{ATTEMPT}"
     BATCH_SIZE = 210
-    MODEL_PATH = "../yolo11m.pt"  # Adjust to your YOLO model path
+    YOLO_11 = "yolo11m.pt"
+    YOLO_11_THERMAL = "yolo11m_thermal.pt" # Finetuned thermal model
+    MODEL_PATH = "../" + YOLO_11_THERMAL  # Adjust to your YOLO model path
     TRY_RUN = False
 
     timestamp = get_timestamp_dir()

@@ -309,10 +309,23 @@ def main():
     ATTEMPT = "DistortedAllFASTERRCNN_MOBILENET_V3_LARGE_FPN"
     DIR = "1bins_1point_01_coco17_distorted_full_320p_subsamp_444"
     TRIAL = f"attempt{ATTEMPT}_{DIR}"
+<<<<<<< HEAD
     MODEL_PATH = f"checkpoints/{TRIAL}/best_model.pt"
     IMGS_ROOT = "balanced_dataset_coco17_distorted"
     DDSCORES_ROOT = "balanced_dataset_coco17_distorted"
     OUTPUT_PATH = f"checkpoints/{TRIAL}/test_predictions.json"
+=======
+    #MODEL_PATH = f"checkpoints/{TRIAL}/best_model.pt"
+    #IMGS_ROOT = "balanced_dataset_coco2017"
+    #DDSCORES_ROOT = "balanced_dataset_coco2017"
+    #OUTPUT_PATH = f"checkpoints/{TRIAL}/test_predictions.json"
+    TEST = "thermal" #"RGB"
+    MODEL_PATH = f"checkpoints/{TEST}_best_model.pt"
+    IMGS_ROOT = "balanced_dataset_sr"
+    DDSCORES_ROOT = "balanced_dataset_sr"
+    OUTPUT_PATH = f"checkpoints/{TEST}_test_predictions.json"
+    #BACKBONE = Backbone.YOLO_V11_M
+>>>>>>> 6b0e5f830fc13acd398ebf1f0fa5cb356dd93dc0
     BACKBONE = Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
 
     # Benchmarking flag

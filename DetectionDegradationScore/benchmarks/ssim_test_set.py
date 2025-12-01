@@ -95,10 +95,12 @@ def calculate_statistics(predictions: List[float], targets: List[float]) -> Dict
 
 def main():
     # Configuration
-    base_dir = "balanced_dataset_coco2017/test"
+    #base_dir = "balanced_dataset_coco2017/test"
+    base_dir = "balanced_dataset_sr/test"
     extracted_dir = os.path.join(base_dir, "extracted")
     compressed_dir = os.path.join(base_dir, "compressed")
-    error_scores_path = os.path.join(base_dir, "error_scores.json")
+    #error_scores_path = os.path.join(base_dir, "error_scores.json")
+    error_scores_path = os.path.join(base_dir, "ddscores.json")
     output_path = "ssim_vs_dds_results.json"
 
     # Check for GPU, but SSIM calculation is done on CPU

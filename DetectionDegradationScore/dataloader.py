@@ -209,9 +209,10 @@ def create_dataloaders(
     backbone_name: Backbone,
     ddscores_root: str = None,
     num_workers: int = 4,
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
+) -> Tuple[Optional[DataLoader], Optional[DataLoader], Optional[DataLoader]]:
     """
     Create dataloaders for image pairs with optional dd scores and backbone-specific preprocessing.
+    Returns None for splits that don't exist.
     """
     loaders = {}
     imagenet_mean = [0.485, 0.456, 0.406]
@@ -240,17 +241,29 @@ def create_dataloaders(
         raise ValueError(f"Unknown backbone '{backbone_name.value}'")
 
     for split in ["train", "val", "test"]:
-        dataset = ImagePairDataset(
-            dataset_root, split, ddscores_root, preprocess=preprocess_transform
-        )  # Pass preprocess transform to dataset
+        # Check if split directory exists
+        split_path = Path(dataset_root) / split
+        if not split_path.exists():
+            print(f"Warning: Split directory '{split}' not found, skipping...")
+            loaders[split] = None
+            continue
 
-        loaders[split] = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=(split == "train"),
-            num_workers=num_workers,
-            pin_memory=True,
-        )
+        try:
+            dataset = ImagePairDataset(
+                dataset_root, split, ddscores_root, preprocess=preprocess_transform
+            )  # Pass preprocess transform to dataset
+
+            loaders[split] = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=(split == "train"),
+                num_workers=num_workers,
+                pin_memory=True,
+            )
+            print(f"Created dataloader for '{split}' split with {len(dataset)} images")
+        except Exception as e:
+            print(f"Warning: Could not create dataloader for '{split}' split: {str(e)}")
+            loaders[split] = None
 
     return loaders["train"], loaders["val"], loaders["test"]
 
@@ -260,9 +273,10 @@ def create_multi_compression_dataloaders(
     batch_size: int,
     quality_values: list = [10, 20, 30, 40, 50],
     num_workers: int = 4,
-) -> Dict[str, DataLoader]:
+) -> Dict[str, Optional[DataLoader]]:
     """
     Create dataloaders for multi-compression image sets.
+    Returns None for splits that don't exist.
 
     Args:
         dataset_root: Root directory containing the dataset
@@ -271,11 +285,18 @@ def create_multi_compression_dataloaders(
         num_workers: Number of workers for data loading
 
     Returns:
-        Dictionary of dataloaders for each split
+        Dictionary of dataloaders for each split (None for missing splits)
     """
     loaders = {}
 
-    for split in ["train", "val", "test"]:  # Now processing all splits
+    for split in ["train", "val", "test"]:
+        # Check if split directory exists
+        split_path = Path(dataset_root) / split
+        if not split_path.exists():
+            print(f"Warning: Split directory '{split}' not found, skipping...")
+            loaders[split] = None
+            continue
+
         try:
             dataset = MultiCompressionDataset(
                 dataset_root, split, quality_values=quality_values
@@ -288,9 +309,9 @@ def create_multi_compression_dataloaders(
                 num_workers=num_workers,
                 pin_memory=True,
             )
-            print(f"Created dataloader for {split} split with {len(dataset)} images")
+            print(f"Created dataloader for '{split}' split with {len(dataset)} images")
         except Exception as e:
-            print(f"Warning: Could not create dataloader for {split} split: {str(e)}")
+            print(f"Warning: Could not create dataloader for '{split}' split: {str(e)}")
             loaders[split] = None
 
     return loaders
