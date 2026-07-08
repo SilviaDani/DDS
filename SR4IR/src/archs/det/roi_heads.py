@@ -764,6 +764,7 @@ class RoIHeads(nn.Module):
             matched_idxs = None
 
         box_features = self.box_roi_pool(features, proposals, image_shapes)
+        feats['roi_features'] = box_features
         box_features = self.box_head(box_features)
         feats['box_features'] = box_features
         class_logits, box_regression = self.box_predictor(box_features)

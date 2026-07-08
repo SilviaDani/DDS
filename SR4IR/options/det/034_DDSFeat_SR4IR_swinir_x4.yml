@@ -1,5 +1,6 @@
-name: 034_DDSFeat_SR4IR_swinir_x4_ARNIQA_100epochs_10warmup_1
-model_type: sr4ir_det
+name: 034_DDSFeat_SR4IR_swinir_x4_30epochs_3warmup_lambda25v2_voc
+model_type: sr4ir_det_dds
+#resume: experiments/det/034_DDSFeat_SR4IR_swinir_x4_30epochs_3warmup_lambda1_05_2_norm_nodet_Visdrone_pt1/checkpoints/checkpoint_latest.pth
 num_threads: 16
 print_freq: 100  # unit: iter
 manual_seed: 100
@@ -38,7 +39,9 @@ network_sr:
 network_det:
   name: fasterrcnn_mobilenet_v3_large_fpn
   weights_backbone: MobileNet_V3_Large_Weights.IMAGENET1K_V1
-  num_classes: 21
+  #weights: DEFAULT
+  num_classes: 21 #odvirat 5 #pascal 21 # kitti visdrone 7
+
 # path for pretrained model
 path:
   network_sr: experiments/pretrained_models/001_classicalSR_DIV2K_s48w8_SwinIR-M_x4.pth
@@ -48,10 +51,10 @@ path:
 train:  
   batch_size: 1
   #batch_size: 2  # 8 GPU
-  epoch: 100
+  epoch: 30
   save_freq: 10  # unit: epoch
   eval_freq: 10
-  warmup_epoch: 10
+  warmup_epoch: 3
 
   # optimizer
   optim_sr:
@@ -63,30 +66,38 @@ train:
     type: SGD
     lr: !!float 1e-3
     momentum: 0.9
-    weight_decay: !!float 1e-5
+    weight_decay: !!float 1e-5 #my 1e-5, orig 1e-4
 
   # scheduler
   scheduler_sr:
     type: CosineAnnealingRestartLR
-    periods: [10, 90]  # 10 for warmup
+    periods: [3, 27]  # 3 for warmup
     restart_weights: [1, 1]
     eta_min: !!float 1e-6
   scheduler_det:
     type: CosineAnnealingRestartLR
-    periods: [10, 90]  # 10 for warmup
+    periods: [3, 27]  # 3 for warmup
     restart_weights: [1, 1]
-    eta_min: !!float 1e-6
+    eta_min: !!float 1e-6 #my 1e-6 orig 1e-4
 
   # phase 1 losses
   pixel_opt:
     type: L1Loss
     loss_weight: !!float 1.0
     reduction: mean
-  tdp_opt:
-    type: DDSLoss
-    loss_weight: !!float 0.3
-    model_path: "../DetectionDegradationScore/checkpoints/attemptFASTERRCNN_seed_dynamic_distortions_sr25/best_model.pt"
-    backbone: Backbone.FASTERRCNN_MOBILENET_V3_LARGE_FPN
+
+  # tdp_opt:
+  #   type: FeatureLoss
+  #   loss_weight: !!float 1.0
+  #   criterion: l1
+  #   layer_weights:
+  #     '0': 0.5
+  #     '1': 0.5
+  
+  ddsrn_opt:
+    type: DDSRNFeatureLoss
+    loss_weight: !!float 25.0
+    model_path: "../DetectionDegradationScore/checkpoints/attemptAgnostic_Kitti_Visdrone_FPN_v1/best_model.pt"
     device: "cuda"
 
   # phase 2 losses

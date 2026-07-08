@@ -32,14 +32,42 @@ class CocoEvaluator:
         self.eval_imgs = {k: [] for k in iou_types}
 
     def update(self, predictions):
-        img_ids = list(np.unique(list(predictions.keys())))
+        clean_predictions = {}
+        # Get a set of all valid, legal IDs from the JSON
+        valid_gt_ids = set(self.coco_gt.getImgIds())
+        
+        for k, v in predictions.items():
+            # Clean the tensor to an int
+            clean_k = k.item() if isinstance(k, torch.Tensor) else k
+            
+            # --- [THE NEW BOUNCER] ---
+            # Only process this image if its ID actually exists in the JSON
+            if clean_k in valid_gt_ids:
+                clean_predictions[clean_k] = v
+        # -------------------------
+        #img_ids = list(np.unique(list(predictions.keys())))
+        img_ids = list(np.unique(list(clean_predictions.keys())))
+        if len(img_ids) == 0:
+            return
         self.img_ids.extend(img_ids)
 
         for iou_type in self.iou_types:
-            results = self.prepare(predictions, iou_type)
+            #results = self.prepare(predictions, iou_type)
+            results = self.prepare(clean_predictions, iou_type)
+
+            if len(results) > 0:
+                pred_img_ids = set([res['image_id'] for res in results])
+                gt_img_ids = set(self.coco_gt.getImgIds())
+                
             with redirect_stdout(io.StringIO()):
                 coco_dt = COCO.loadRes(self.coco_gt, results) if results else COCO()
             coco_eval = self.coco_eval[iou_type]
+
+            # --- [THE NEW FIX: Give empty COCO objects the required skeleton] ---
+            if not results:
+                coco_dt.dataset = {'images': [], 'annotations': [], 'categories': []}
+                coco_dt.createIndex()
+            # --------------------------------------------------------------------
 
             coco_eval.cocoDt = coco_dt
             coco_eval.params.imgIds = list(img_ids)

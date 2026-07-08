@@ -34,13 +34,18 @@ class SR4IRDetectionModel(BaseModel):
         # define network detction
         self.net_det = build_network(opt['network_det'], self.text_logger, task=self.task, tag='net_det')
         self.load_network(self.net_det, name='network_det', tag='net_det')
-        self.net_det = self.model_to_device(self.net_det, is_trainable=True)
+
+        # [MODIFIED]: Set is_trainable to False for the detector
+        # self.net_det = self.model_to_device(self.net_det, is_trainable=True)
+        self.net_det = self.model_to_device(self.net_det, is_trainable=False)
         self.print_network(self.net_det, tag='net_det')
         
     def set_mode(self, mode):
         if mode == 'train':
             self.net_sr.train()
-            self.net_det.train()
+            # [MODIFIED]: Force detector to stay in eval mode
+            # self.net_det.train()
+            self.net_det.eval()
         elif mode == 'eval':
             self.net_sr.eval()
             self.net_det.eval()
@@ -62,19 +67,22 @@ class SR4IRDetectionModel(BaseModel):
         if train_opt.get('ddsrn_opt'):
             self.cri_ddsrn = build_loss(train_opt['ddsrn_opt'], self.text_logger).to(self.device)
         # phase 2
-        if train_opt.get('det_sr_opt'):
-            self.cri_det_sr = build_loss(train_opt['det_sr_opt'], self.text_logger).to(self.device)
-        
-        if train_opt.get('det_hr_opt'):
-            self.cri_det_hr = build_loss(train_opt['det_hr_opt'], self.text_logger).to(self.device)
-            
-        if train_opt.get('det_cqmix_opt'):
-            self.cri_det_cqmix = build_loss(train_opt['det_cqmix_opt'], self.text_logger).to(self.device)
+        # [MODIFIED]: Commented out all detector losses
+        # if train_opt.get('det_sr_opt'):
+        #     self.cri_det_sr = build_loss(train_opt['det_sr_opt'], self.text_logger).to(self.device)
+        # 
+        # if train_opt.get('det_hr_opt'):
+        #     self.cri_det_hr = build_loss(train_opt['det_hr_opt'], self.text_logger).to(self.device)
+        #     
+        # if train_opt.get('det_cqmix_opt'):
+        #     self.cri_det_cqmix = build_loss(train_opt['det_cqmix_opt'], self.text_logger).to(self.device)
 
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers(len(data_loader_train), name='sr', optimizer=self.optimizer_sr)
-        self.setup_schedulers(len(data_loader_train), name='det', optimizer=self.optimizer_det)
+        
+        # [MODIFIED]: Commented out det scheduler setup
+        # self.setup_schedulers(len(data_loader_train), name='det', optimizer=self.optimizer_det)
         
         # set up saving directories
         os.makedirs(osp.join(self.exp_dir, 'models'), exist_ok=True)
@@ -95,11 +103,12 @@ class SR4IRDetectionModel(BaseModel):
         self.optimizer_sr = self.get_optimizer(optim_type, self.net_sr.parameters(), **train_opt['optim_sr'])
         self.optimizers.append(self.optimizer_sr)
         
+        # [MODIFIED]: Commented out det optimizer
         # optimizer det
-        optim_type = train_opt['optim_det'].pop('type')
-        net_det_parameters = [p for p in self.net_det.parameters() if p.requires_grad]
-        self.optimizer_det = self.get_optimizer(optim_type, net_det_parameters, **train_opt['optim_det'])
-        self.optimizers.append(self.optimizer_det)
+        # optim_type = train_opt['optim_det'].pop('type')
+        # net_det_parameters = [p for p in self.net_det.parameters() if p.requires_grad]
+        # self.optimizer_det = self.get_optimizer(optim_type, net_det_parameters, **train_opt['optim_det'])
+        # self.optimizers.append(self.optimizer_det)
 
     def get_gradients(self, loss, parameters, retain_graph=False):
         """Compute gradients for a given loss."""
@@ -141,7 +150,8 @@ class SR4IRDetectionModel(BaseModel):
         self.set_mode(mode='train')
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr_sr", SmoothedValue(window_size=1, fmt="{value}"))
-        metric_logger.add_meter("lr_det", SmoothedValue(window_size=1, fmt="{value}"))
+        # [MODIFIED]: Commented out lr_det meter
+        # metric_logger.add_meter("lr_det", SmoothedValue(window_size=1, fmt="{value}"))
         
         if self.dist:
             train_sampler.set_epoch(epoch)
@@ -157,21 +167,15 @@ class SR4IRDetectionModel(BaseModel):
             warmup_iters = len(data_loader_train)
             lr_scheduler_s = torch.optim.lr_scheduler.LinearLR(
                 self.optimizer_sr, start_factor=warmup_factor, total_iters=warmup_iters)
-            lr_scheduler_d = torch.optim.lr_scheduler.LinearLR(
-                self.optimizer_det, start_factor=warmup_factor, total_iters=warmup_iters)
+            # [MODIFIED]: Commented out det scheduler
+            # lr_scheduler_d = torch.optim.lr_scheduler.LinearLR(
+            #     self.optimizer_det, start_factor=warmup_factor, total_iters=warmup_iters)
 
         header = f"Epoch: [{epoch}, Name {self.opt['name']}]"
         for iter, (img_hr_list, target_list) in enumerate(metric_logger.log_every(data_loader_train, self.opt['print_freq'], self.text_logger, header)):
             img_hr_list = list(img_hr.to(self.device) for img_hr in img_hr_list)
             target_list = [{k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in target_list]
             current_iter = iter + len(data_loader_train)*(epoch-1)
-
-            # for KITTI & VISDRONE <---
-            # Shift ground truth labels +1 because Faster R-CNN reserves 0 for background
-            # for t in target_list:
-            #     if 'labels' in t:
-            #         t['labels'] = t['labels'] + 1
-            #--------------------------------------------
 
             # make on-the-fly LR image
             img_hr_batch = self.list_to_batch(img_hr_list)
@@ -181,6 +185,7 @@ class SR4IRDetectionModel(BaseModel):
             # update net_sr, freeze net_cls
             img_sr_batch = self.net_sr(img_lr_batch)
             img_sr_list = self.batch_to_list(img_sr_batch, img_list=img_hr_list)
+            # [MODIFIED]: Harmless, but kept for redundancy. Det is already frozen.
             for p in self.net_det.parameters(): p.requires_grad = False
             self.optimizer_sr.zero_grad()
             l_total_sr = 0
@@ -207,7 +212,8 @@ class SR4IRDetectionModel(BaseModel):
                     l_total_sr += l_tdp
 
                 if hasattr(self, 'cri_ddsrn'):
-                    l_ddsrn = self.cri_ddsrn(img_hr_batch, img_sr_batch)
+                    #l_ddsrn = self.cri_ddsrn(img_sr_batch, img_hr_batch)
+                    l_ddsrn = self.cri_ddsrn(img_sr_batch, img_hr_batch)
                     metric_logger.meters["l_ddsrn"].update(l_ddsrn.item())
                     self.tb_logger.add_scalar('losses/l_ddsrn', l_ddsrn.item(), current_iter)
                     l_total_sr += l_ddsrn
@@ -218,48 +224,31 @@ class SR4IRDetectionModel(BaseModel):
                 l_total_sr.backward()
             self.optimizer_sr.step()
             
+            # [MODIFIED]: ENTIRE PHASE 2 COMMENTED OUT
             # phase 2;
             # update network det, freeze net_cls
-            img_sr_batch = self.net_sr(img_lr_batch).detach()
-            img_sr_list = self.batch_to_list(img_sr_batch, img_list=img_hr_list)
-            for p in self.net_det.parameters(): p.requires_grad = True
-            self.optimizer_det.zero_grad()
-            l_total_det = 0
-            if hasattr(self, 'cri_det_sr'):
-                _, loss_dict_sr = self.net_det(img_sr_list, target_list)
-                l_det_sr = self.cri_det_sr(loss_dict_sr)
-                metric_logger.meters["l_det_sr"].update(l_det_sr.item())
-                self.tb_logger.add_scalar('losses/l_det_sr', l_det_sr.item(), current_iter)
-                l_total_det += l_det_sr
-            if hasattr(self, 'cri_det_hr'):
-                _, loss_dict_hr = self.net_det(img_hr_list, target_list)
-                l_det_hr = self.cri_det_hr(loss_dict_hr)
-                metric_logger.meters["l_det_hr"].update(l_det_hr.item())
-                self.tb_logger.add_scalar('losses/l_det_hr', l_det_hr.item(), current_iter)
-                l_total_det += l_det_hr
-            if hasattr(self, 'cri_det_cqmix'):
-                batch_size = len(img_hr_list)
-                mask = interpolate((torch.randn(batch_size,1,8,8)).bernoulli_(p=0.5), size=(img_hr_batch.shape[2:]), mode='nearest').to(self.device)
-                img_cqmix_batch = img_sr_batch*mask + img_hr_batch*(1-mask)
-                img_cqmix_list = self.batch_to_list(img_cqmix_batch, img_list=img_hr_list)
-                _, loss_dict_cqmix = self.net_det(img_cqmix_list, target_list)
-                l_det_cqmix = self.cri_det_cqmix(loss_dict_cqmix)
-                metric_logger.meters["l_det_cqmix"].update(l_det_cqmix.item())
-                self.tb_logger.add_scalar('losses/l_det_cqmix', l_det_cqmix.item(), current_iter)
-                l_total_det += l_det_cqmix
-            l_total_det.backward()
-            self.optimizer_det.step()
+            # img_sr_batch = self.net_sr(img_lr_batch).detach()
+            # img_sr_list = self.batch_to_list(img_sr_batch, img_list=img_hr_list)
+            # for p in self.net_det.parameters(): p.requires_grad = True
+            # self.optimizer_det.zero_grad()
+            # l_total_det = 0
+            # if hasattr(self, 'cri_det_sr'):
+            #     _, loss_dict_sr = self.net_det(img_sr_list, target_list_coco) # <-- Use mapped targets here!
+            #     l_det_sr = self.cri_det_sr(loss_dict_sr)
+            #     ...
             
             # psnr, lr
             psnr, valid_batch_size = calculate_psnr_batch(quantize(img_sr_batch), img_hr_batch)
             metric_logger.meters["psnr"].update(psnr.item(), n=valid_batch_size)
             metric_logger.update(lr_sr=round(self.optimizer_sr.param_groups[0]["lr"], 8))
-            metric_logger.update(lr_det=round(self.optimizer_det.param_groups[0]["lr"], 8))
+            # [MODIFIED]: Commented out det lr logging
+            # metric_logger.update(lr_det=round(self.optimizer_det.param_groups[0]["lr"], 8))
             
             # update learning rate
             if epoch == 1:
                 lr_scheduler_s.step()
-                lr_scheduler_d.step()
+                # [MODIFIED]: Commented out det scheduler step
+                # lr_scheduler_d.step()
             else:
                 self.update_learning_rate()
         return
@@ -277,6 +266,10 @@ class SR4IRDetectionModel(BaseModel):
         iou_types = _get_iou_types(self.net_det)
         coco_evaluator = CocoEvaluator(coco, iou_types)
 
+        valid_ids = [1, 2, 3, 4, 6, 8]
+        for iou_type in iou_types:
+            coco_evaluator.coco_eval[iou_type].params.catIds = valid_ids
+        
         num_processed_samples = 0
         for (img_hr_list, target_list), filename in metric_logger.log_every(data_loader_test, 1000, self.text_logger, header, return_filename=True):
             img_hr_list = list(img_hr.to(self.device) for img_hr in img_hr_list)
@@ -293,14 +286,43 @@ class SR4IRDetectionModel(BaseModel):
             # object detection
             if torch.cuda.is_available(): torch.cuda.synchronize()
             outputs_sr, _ = self.net_det(img_sr_list)
-            outputs_sr = [{k: v.to(torch.device("cpu")) for k, v in t.items()} for t in outputs_sr]
 
-            # for KITTI & VISDRONE <---
-            # Shift predicted labels -1 back to original dataset IDs for COCO eval
-            # for out in outputs_sr:
-            #     if 'labels' in out:
-            #         out['labels'] = out['labels'] - 1
-            #--------------------------------------------
+            # --- [ADDED: COCO to VOC backward mapping for evaluation] ---
+            # coco_to_voc = {
+            #     5: 1, 2: 2, 16: 3, 9: 4, 44: 5, 6: 6, 3: 7, 17: 8, 62: 9,
+            #     21: 10, 67: 11, 18: 12, 19: 13, 4: 14, 1: 15, 64: 16,
+            #     20: 17, 63: 18, 7: 19, 72: 20
+            # }
+            # --- [DEBUG VERSION: COCO to VisDrone mapping] ---
+            coco_to_voc = {1:1, 2:2, 3:3, 4:4, 6:6, 8:8} #for visdrone, already converted in annotations
+            outputs_voc = []
+
+            for i, output in enumerate(outputs_sr):
+                raw_labels = output["labels"].tolist()
+                
+                mapped_labels = []
+                keep_mask = []
+                
+                for label in output["labels"]:
+                    l_val = int(label)
+                    if l_val in coco_to_voc:
+                        mapped_labels.append(coco_to_voc[l_val])
+                        keep_mask.append(True)
+                    else:
+                        keep_mask.append(False)
+                
+                keep = torch.tensor(keep_mask, dtype=torch.bool, device=output["labels"].device)
+                
+                out_mapped = {
+                    "boxes": output["boxes"][keep].cpu(),
+                    "scores": output["scores"][keep].cpu(),
+                    "labels": torch.tensor(mapped_labels, dtype=output["labels"].dtype, device=torch.device("cpu"))
+                }
+                
+                outputs_voc.append(out_mapped)
+
+            outputs_sr = outputs_voc
+            # ------------------------------------------------------------
 
             # visualizing tool
             if self.opt['test'].get('visualize', False): # and (num_processed_samples < 20):
@@ -313,6 +335,7 @@ class SR4IRDetectionModel(BaseModel):
             if self.opt['test'].get('calculate_lpips', False):
                 lpips, valid_batch_size = calculate_lpips_batch(quantize(img_sr_batch), img_hr_batch, self.net_lpips)
                 metric_logger.meters["lpips"].update(lpips.item(), n=valid_batch_size)
+            
             res = {target["image_id"]: output for target, output in zip(target_list, outputs_sr)}
             coco_evaluator.update(res)
             num_processed_samples += batch_size
@@ -332,7 +355,8 @@ class SR4IRDetectionModel(BaseModel):
         coco_evaluator.accumulate()
         coco_evaluator.summarize(self.text_logger, tag='SR')
         return
-
+    
+    
     def save(self, epoch):
         # Create full checkpoint dictionary
         checkpoint = {

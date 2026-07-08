@@ -20,8 +20,14 @@ class Backbone(Enum):
         """Get the layer configuration for the backbone."""
         configs = {
             Backbone.YOLO_V11_M: LayerConfig(
-                indices=[9],
-                channels=[512],
+                #indices=[9],
+                #channels=[512],
+                # Indices: 
+                # 4 = P3 (Detailed texture/noise) <- MOST IMPORTANT FOR IQA but it needs too much CUDA memory
+                # 6 = P4 (Structure/Edges)
+                # 9 = P5 (Context/Content)
+                indices=[4, 6, 9],
+                channels=[512, 512, 512],
             ),
             Backbone.VGG_16: LayerConfig(
                 indices=[23, 30],

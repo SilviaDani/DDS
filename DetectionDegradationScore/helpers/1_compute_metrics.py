@@ -1,20 +1,24 @@
 import argparse
 import json
-import glob
 import os
 import sys
 import numpy as np
-import multiprocessing as mp
+import warnings
 from pathlib import Path
 from tqdm import tqdm
 from PIL import Image
+
+# PyTorch / Vision
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 
 # COCO API
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-# Torch / Vision
-from torch.utils.data import Dataset
+# Ultralytics
+from ultralytics import YOLO
 
 # ---------------------------------------------------------
 # OPTIONAL IMPORTS (DDS & LPIPS)
@@ -32,84 +36,74 @@ except ImportError:
     lpips = None
     print("Warning: 'lpips' library not installed. LPIPS scores will be skipped.")
 
-# Set multiprocessing start method for CUDA
-if __name__ == '__main__':
-    try:
-        mp.set_start_method('spawn', force=True)
-    except RuntimeError:
-        pass
+# Filter warnings
+warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------
-# 1. Detection Logic
+# 1. Detection Logic (Optimized with DataLoader)
 # ---------------------------------------------------------
+
+class COCOImageDataset(Dataset):
+    """Dataset to load images efficiently for Batch Inference"""
+    def __init__(self, image_files, annotation_file):
+        self.image_files = [Path(p) for p in image_files]
+        self.filename_to_id = {}
+        
+        # Load annotation mapping
+        if annotation_file and os.path.exists(annotation_file):
+            with open(annotation_file, 'r') as f:
+                coco_data = json.load(f)
+            # Create map: '000000123.jpg' -> 123
+            self.filename_to_id = {img['file_name']: img['id'] for img in coco_data['images']}
+        
+    def _get_original_filename(self, filepath):
+        name = filepath.name
+        if name in self.filename_to_id: return name
+        
+        # Handle corruption naming: 0000123_noise_5.jpg -> 0000123.jpg
+        parts = name.split('_')
+        if len(parts) > 1:
+            potential = parts[0] + filepath.suffix
+            if potential in self.filename_to_id: return potential
+        return None
+
+    def __len__(self):
+        return len(self.image_files)
+    
+    def __getitem__(self, idx):
+        image_path = self.image_files[idx]
+        original_name = self._get_original_filename(image_path)
+        
+        if not original_name:
+            return None # Skip invalid
+            
+        try:
+            # Load PIL Image (YOLOv8 handles resizing/transforms internally)
+            img = Image.open(image_path).convert("RGB")
+            return img, {'image_id': self.filename_to_id[original_name], 'path': str(image_path)}
+        except Exception as e:
+            return None
+
+def coco_collate_fn(batch):
+    """Custom collate to handle PIL images and filter Nones"""
+    batch = [b for b in batch if b is not None]
+    if not batch:
+        return [], []
+    images = [b[0] for b in batch]
+    infos = [b[1] for b in batch]
+    return images, infos
 
 class COCODetectionGenerator:
     def __init__(self, model_path, device='cuda:0'):
         self.device = device
-        self.model_path = model_path
+        # Load Model ONCE
+        print(f"Loading YOLO model: {model_path} to {device}...")
+        self.model = YOLO(model_path)
         
-    class COCODataset(Dataset):
-        def __init__(self, image_files, annotation_file):
-            self.image_files = [Path(p) for p in image_files]
-            
-            # Load annotation mapping
-            if annotation_file and os.path.exists(annotation_file):
-                with open(annotation_file, 'r') as f:
-                    coco_data = json.load(f)
-                self.filename_to_id = {img['file_name']: img['id'] for img in coco_data['images']}
-            else:
-                raise ValueError("Annotation file is required!")
-        
-        def _get_original_filename(self, filepath):
-            name = filepath.name
-            if name in self.filename_to_id: return name
-            
-            # Try splitting: 0000123_noise_5.jpg -> 0000123.jpg
-            parts = name.split('_')
-            if len(parts) > 1:
-                potential = parts[0] + filepath.suffix
-                if potential in self.filename_to_id: return potential
-            return None
-
-        def __len__(self):
-            return len(self.image_files)
-        
-        def __getitem__(self, idx):
-            image_path = self.image_files[idx]
-            original_name = self._get_original_filename(image_path)
-            
-            if not original_name:
-                return None # Skip invalid files
-                
-            return {
-                'image_path': str(image_path),
-                'image_id': self.filename_to_id[original_name],
-                'original_name': original_name
-            }
-
-    @staticmethod
-    def process_image(item):
-        """Worker function for detection inference"""
-        if item is None: return []
-        
-        from ultralytics import YOLO
-        
-        # Load model inside worker
-        model = YOLO(item['model_path'], verbose=False)
-        
-        try:
-            image = Image.open(item['image_path']).convert("RGB")
-            # YOLO usually auto-selects GPU, but you can force it if needed using device=...
-            results = model(image, verbose=False, conf=0.001)
-            return COCODetectionGenerator.yolo_to_coco_format(results, item['image_id'])
-        except Exception as e:
-            return []
-
-    @staticmethod
-    def yolo_to_coco_format(predictions, image_id, score_threshold=0.001):
+    def yolo_to_coco_format(self, predictions, infos, score_threshold=0.001):
         coco_results = []
         
-        # FIX: Map YOLO 0-79 index to COCO 1-90 Category ID
+        # Map YOLO 0-79 index to COCO 1-90 Category ID
         COCO_MAP = [
             1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20,
             21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
@@ -118,14 +112,13 @@ class COCODetectionGenerator:
             80, 81, 82, 84, 85, 86, 87, 88, 89, 90
         ]
         
-        if not predictions: return []
-            
-        for pred in predictions:
+        for pred, info in zip(predictions, infos):
             if pred.boxes is None: continue
             
             boxes = pred.boxes.xyxy.cpu().numpy()
             scores = pred.boxes.conf.cpu().numpy()
             class_ids = pred.boxes.cls.cpu().numpy().astype(int)
+            image_id = info['image_id']
             
             for box, score, class_id in zip(boxes, scores, class_ids):
                 if score < score_threshold: continue
@@ -139,82 +132,47 @@ class COCODetectionGenerator:
                 })
         return coco_results
 
-    def generate(self, image_files, annotation_file, output_file, num_workers=4):
-        dataset = self.COCODataset(image_files, annotation_file)
-        
-        items = []
-        for i in range(len(dataset)):
-            item = dataset[i]
-            if item:
-                item['model_path'] = self.model_path
-                items.append(item)
+    def generate(self, image_files, annotation_file, output_file, batch_size=32, num_workers=4):
+        dataset = COCOImageDataset(image_files, annotation_file)
+        if len(dataset) == 0:
+            return
+
+        # DataLoader handles multi-process loading (CPU) while GPU computes
+        loader = DataLoader(
+            dataset, 
+            batch_size=batch_size, 
+            num_workers=num_workers, 
+            collate_fn=coco_collate_fn,
+            pin_memory=True
+        )
         
         all_results = []
-        if num_workers > 0:
-            with mp.Pool(num_workers) as pool:
-                for res in tqdm(pool.imap_unordered(self.process_image, items), total=len(items), desc="Inference"):
-                    all_results.extend(res)
-        else:
-            for item in tqdm(items, desc="Inference"):
-                all_results.extend(self.process_image(item))
+        
+        # Batch Inference Loop
+        for images, infos in tqdm(loader, desc="Detection Inference"):
+            if not images: continue
+            
+            # YOLOv8 supports passing a list of PIL images for batched inference
+            results = self.model(images, verbose=False, conf=0.001, device=self.device)
+            
+            batch_coco = self.yolo_to_coco_format(results, infos)
+            all_results.extend(batch_coco)
                 
         with open(output_file, 'w') as f:
             json.dump(all_results, f)
 
 # ---------------------------------------------------------
-# 2. Perception Logic (DDS & LPIPS)
+# 2. Perception Logic (Sequential - Safer)
 # ---------------------------------------------------------
 
-def perception_worker(args):
-    clean_path, corrupted_path, model_path, lpips_net = args
-    results = {'dds': None, 'lpips': None}
-    
-    import torch
-    from torchvision import transforms
-    from PIL import Image
-    from ultralytics import YOLO
-    import lpips
-    
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
-    try:
-        clean_img = Image.open(clean_path).convert("RGB")
-        corr_img = Image.open(corrupted_path).convert("RGB")
-        
-        # 1. Compute LPIPS
-        if lpips is not None:
-            t_lpips = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-            ])
-            c_t = t_lpips(clean_img).unsqueeze(0).to(device)
-            n_t = t_lpips(corr_img).unsqueeze(0).to(device)
-            
-            loss_fn = lpips.LPIPS(net=lpips_net, verbose=False).to(device)
-            with torch.no_grad():
-                dist = loss_fn(c_t, n_t)
-                results['lpips'] = float(dist.item())
-
-        # 2. Compute DDS
-        if model_path and match_predictions is not None:
-            model = YOLO(model_path, verbose=False) 
-            clean_res = model(clean_img, verbose=False)[0]
-            corr_res = model(corr_img, verbose=False)[0]
-            
-            matches = match_predictions(clean_res, corr_res)
-            if matches:
-                results['dds'] = float(matches[0].get("ddscore", 0.0))
-            else:
-                results['dds'] = 0.0
-
-    except Exception as e:
-        pass
-        
-    return results
-
-def compute_perception(target_files, clean_dir, model_path, workers=4):
+def compute_perception_sequential(target_files, clean_dir, model_path, device='cuda:0'):
+    """
+    Computes LPIPS and DDS sequentially (one by one) to avoid batching size mismatches.
+    Still significantly faster than the original code because models are loaded only once.
+    """
     if not target_files: return {}
-
+    
+    # 1. Prepare Pairs
     pairs = []
     clean_candidates = {p.name: p for p in Path(clean_dir).glob("*")}
     
@@ -224,38 +182,69 @@ def compute_perception(target_files, clean_dir, model_path, workers=4):
         
         if corrupted.name in clean_candidates:
             clean_name = corrupted.name
-        
-        if not clean_name:
+        else:
             parts = corrupted.name.split('_')
             potential = parts[0] + corrupted.suffix
             if potential in clean_candidates:
                 clean_name = potential
         
         if clean_name:
-            pairs.append((
-                str(clean_candidates[clean_name]), 
-                str(corrupted),
-                model_path,
-                'alex'
-            ))
+            pairs.append((clean_candidates[clean_name], corrupted))
             
-    if not pairs:
-        print("Warning: Could not pair any corrupted images for perception.")
-        return {}
-        
+    if not pairs: return {}
+
+    # 2. Init Models ONCE (Outside the loop)
+    dds_model = None
+    lpips_loss = None
+    t_lpips = None
+    
+    if lpips is not None:
+        lpips_loss = lpips.LPIPS(net='alex', verbose=False).to(device)
+        # Standard LPIPS transform (No resize/padding needed for sequential!)
+        t_lpips = transforms.Compose([
+            transforms.Resize((256, 256)),  # LPIPS standard size
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        ])
+
+    if match_predictions is not None and model_path:
+        dds_model = YOLO(model_path)
+
     dds_scores = []
     lpips_scores = []
-    
-    if workers > 0:
-        with mp.Pool(workers) as pool:
-            for res in tqdm(pool.imap(perception_worker, pairs), total=len(pairs), desc="Perception"):
-                if res['dds'] is not None: dds_scores.append(res['dds'])
-                if res['lpips'] is not None: lpips_scores.append(res['lpips'])
-    else:
-        for p in tqdm(pairs, desc="Perception"):
-            res = perception_worker(p)
-            if res['dds'] is not None: dds_scores.append(res['dds'])
-            if res['lpips'] is not None: lpips_scores.append(res['lpips'])
+
+    # 3. Sequential Loop
+    for clean_path, corr_path in tqdm(pairs, desc="Perception (Seq)"):
+        try:
+            # Load Images
+            c_img = Image.open(clean_path).convert("RGB")
+            n_img = Image.open(corr_path).convert("RGB")
+
+            # --- LPIPS (Single Pair) ---
+            if lpips_loss is not None:
+                # Unsqueeze(0) adds the batch dimension: [C, H, W] -> [1, C, H, W]
+                c_tensor = t_lpips(c_img).unsqueeze(0).to(device)
+                n_tensor = t_lpips(n_img).unsqueeze(0).to(device)
+                
+                with torch.no_grad():
+                    dist = lpips_loss(c_tensor, n_tensor)
+                    lpips_scores.append(dist.item())
+
+            # --- DDS (Single Pair) ---
+            if dds_model is not None:
+                # YOLO handles resizing internally, so we pass raw PIL images
+                c_res = dds_model(c_img, verbose=False, conf=0.25, device=device)[0]
+                n_res = dds_model(n_img, verbose=False, conf=0.05, device=device)[0]
+                
+                matches = match_predictions(c_res, n_res)
+                if matches:
+                    dds_scores.append(float(matches[0].get("ddscore", 0.0)))
+                else:
+                    dds_scores.append(0.0)
+
+        except Exception as e:
+            # Skip bad images but don't crash
+            continue
 
     return {
         'mean_dds': float(np.mean(dds_scores)) if dds_scores else 0.0,
@@ -267,16 +256,19 @@ def compute_perception(target_files, clean_dir, model_path, workers=4):
 # ---------------------------------------------------------
 
 def run_benchmark(args):
+    # Initialize Generator (Loads Model Once)
     generator = COCODetectionGenerator(args.model, args.device)
     final_metrics = {'clean': {}, 'corruptions': {}}
     
+    # Pre-fetch clean files
+    clean_files = sorted(list(Path(args.clean_dir).glob("*.jpg")) + list(Path(args.clean_dir).glob("*.png")))
+
     # --- Clean Evaluation ---
     if not args.skip_clean:
         print("\n=== Clean Evaluation ===")
-        clean_files = sorted(list(Path(args.clean_dir).glob("*.jpg")) + list(Path(args.clean_dir).glob("*.png")))
         clean_json = "temp_clean_dets.json"
         
-        generator.generate(clean_files, args.ann_file, clean_json, args.workers)
+        generator.generate(clean_files, args.ann_file, clean_json, args.batch_size, args.workers)
         
         try:
             coco_gt = COCO(args.ann_file)
@@ -285,10 +277,7 @@ def run_benchmark(args):
             coco_eval.evaluate()
             coco_eval.accumulate()
             coco_eval.summarize()
-            final_metrics['clean'] = {
-                'mAP': coco_eval.stats[0],
-                'AP50': coco_eval.stats[1]
-            }
+            final_metrics['clean'] = {'mAP': coco_eval.stats[0], 'AP50': coco_eval.stats[1]}
         except Exception as e:
             print(f"Clean eval failed: {e}")
             final_metrics['clean'] = {'mAP': 0.0}
@@ -309,7 +298,7 @@ def run_benchmark(args):
         for sev in [1, 2, 3, 4, 5]:
             print(f"Severity {sev}:", end=" ")
             
-            # Find Files
+            # File finding logic
             if args.organization == 'filename':
                 target_files = list(Path(args.corrupted_dir).glob(f"*_{corr}_{sev}.*"))
             else:
@@ -321,34 +310,38 @@ def run_benchmark(args):
                 
             stats = {}
             
-            # mAP Evaluation
+            # 1. mAP Evaluation (Batched)
             temp_json = f"temp_{corr}_{sev}.json"
-            generator.generate(target_files, args.ann_file, temp_json, args.workers)
+            generator.generate(target_files, args.ann_file, temp_json, args.batch_size, args.workers)
             
             try:
+                # Capture STDOUT to reduce clutter during loop
+                # sys.stdout = open(os.devnull, 'w') 
                 coco_gt = COCO(args.ann_file)
                 coco_dt = coco_gt.loadRes(temp_json)
                 evaluator = COCOeval(coco_gt, coco_dt, 'bbox')
                 evaluator.evaluate()
                 evaluator.accumulate()
+                # sys.stdout = sys.__stdout__ # Restore
                 evaluator.summarize()
                 
                 stats['mAP'] = evaluator.stats[0]
                 stats['AP50'] = evaluator.stats[1]
                 print(f"mAP: {evaluator.stats[0]:.4f}", end=" | ")
             except Exception:
-                print("Eval Failed (no dets?)", end=" | ")
+                # sys.stdout = sys.__stdout__
+                print("Eval Failed", end=" | ")
                 stats['mAP'] = 0.0
             
             if os.path.exists(temp_json): os.remove(temp_json)
             
-            # Perception Metrics
+            # 2. Perception Metrics (Sequential to avoid Stack errors)
             if args.compute_perception:
-                p_scores = compute_perception(
+                p_scores = compute_perception_sequential(
                     target_files, 
                     args.clean_dir, 
                     args.model,
-                    args.workers
+                    device=args.device
                 )
                 stats.update(p_scores)
                 print(f"LPIPS: {stats.get('mean_lpips',0):.4f} DDS: {stats.get('mean_dds',0):.4f}")
@@ -369,11 +362,23 @@ if __name__ == '__main__':
     parser.add_argument('--ann_file', type=str, required=True)
     parser.add_argument('--output', type=str, default='results.json')
     parser.add_argument('--organization', type=str, default='filename', choices=['filename', 'folder'])
-    parser.add_argument('--workers', type=int, default=4)
+    
+    # Performance args
+    parser.add_argument('--workers', type=int, default=8, help='CPU workers for loading data')
+    parser.add_argument('--batch_size', type=int, default=32, help='GPU Batch size for mAP')
+    
     parser.add_argument('--skip_clean', action='store_true')
-    parser.add_argument('--compute_perception', action='store_true', help='Compute LPIPS/DDS')
+    parser.add_argument('--compute_perception', action='store_true')
     parser.add_argument('--corruption', type=str, default=None)
-    parser.add_argument('--device', type=str, default='cuda:0', help='Device (e.g. cuda:0, cpu)')
+    parser.add_argument('--device', type=str, default='cuda:0')
     
     args = parser.parse_args()
+    
+    # Check GPU
+    if 'cuda' in args.device and not torch.cuda.is_available():
+        print("Warning: CUDA not available, switching to CPU.")
+        args.device = 'cpu'
+
     run_benchmark(args)
+
+    #python helpers/1_compute_metrics.py --model "yolo11m.pt" --clean_dir "COCO_C/cropped_images" --corrupted_dir "COCO_C/corrupted_images" --ann_file "COCO_adapted_annotations.json" --compute_perception --output COCO_results_01.json

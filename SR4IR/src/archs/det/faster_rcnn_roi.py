@@ -9,6 +9,10 @@ from torch import nn
 from torchvision.ops import MultiScaleRoIAlign
 from typing import Any, Callable, List, Optional, Tuple
 
+# Added imports for the weight enums
+from torchvision.models.detection.faster_rcnn import FasterRCNN_MobileNet_V3_Large_FPN_Weights
+from torchvision.models.mobilenetv3 import MobileNet_V3_Large_Weights
+
 from . import misc as misc_nn_ops
 from .mobilenetv3 import mobilenet_v3_large
 from .anchor_utils import AnchorGenerator
@@ -370,7 +374,9 @@ def _fasterrcnn_mobilenet_v3_large_fpn(
     trainable_backbone_layers: Optional[int],
     **kwargs: Any,
 ) -> FasterRCNN:
-    weights = None
+    print("weights:", weights)
+    print("weights_backbone:", weights_backbone)
+    #weights = None
     # num_classes = 91
 
     is_trained = weights is not None or weights_backbone is not None
@@ -446,8 +452,12 @@ def fasterrcnn_mobilenet_v3_large_fpn(
     .. autoclass:: torchvision.models.detection.FasterRCNN_MobileNet_V3_Large_FPN_Weights
         :members:
     """
-    # weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.verify(weights)
-    # weights_backbone = MobileNet_V3_Large_Weights.verify(weights_backbone)
+    
+    # Converts the string values from your YAML file back into Torchvision Enum objects
+    if weights is not None:
+        weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.verify(weights)
+    if weights_backbone is not None:
+        weights_backbone = MobileNet_V3_Large_Weights.verify(weights_backbone)
 
     defaults = {
         "rpn_score_thresh": 0.05,

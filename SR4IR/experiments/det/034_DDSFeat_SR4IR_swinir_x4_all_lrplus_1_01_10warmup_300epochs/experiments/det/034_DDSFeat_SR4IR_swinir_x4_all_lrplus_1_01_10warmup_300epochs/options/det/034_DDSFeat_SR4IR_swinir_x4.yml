@@ -19,7 +19,7 @@
 # src/main.py -opt options/det/034_DDS_YOLO_lr_SR4IR_swinir_x4.yml
 
 name: 034_DDSFeat_SR4IR_swinir_x4_all_lrplus_1_01_10warmup_300epochs
-model_type: sr4ir_det
+model_type: sr4ir_det_dds_yolo
 num_threads: 16
 print_freq: 100  # unit: iter
 manual_seed: 100

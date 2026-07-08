@@ -257,6 +257,7 @@ class BaseModel():
                 load_path = osp.join(self.exp_dir, 'models/net_sr_latest.pth')
             elif tag == 'net_det':
                 load_path = osp.join(self.exp_dir, 'models/net_det_latest.pth')
+                #pass
 
         if load_path is None:
             self.text_logger.write(f"[WARNING] No checkpoint found for {name}")
@@ -374,7 +375,8 @@ class BaseModel():
                 x1, y1, x2, y2 = target['boxes'][idx]
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)                
                 img_label = int(target['labels'][idx])
-                obj_label = self.convert2label(img_label-1)
+                #obj_label = self.convert2label(img_label-1) orig
+                obj_label = self.convert2label(img_label)
                 
                 if (x1 < 0 or x2 > img.size(2) or y1 < 0 or y2 > img.size(1)) or (x1 < 10 and y1 < 10 and obj_label == 'tvmonitor'):
                     # box location exceed image, remove for better visualizaton
@@ -392,11 +394,47 @@ class BaseModel():
         os.makedirs(osp.join(self.exp_dir, 'visualize'), exist_ok=True)
         return cv2.imwrite(osp.join(self.exp_dir, 'visualize', filename), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
-    def convert2label(self, label):
+    def convert2label_orig(self, label):
         table = ['aeroplane', 'bicycle', 'bird', 'boat' ,'bottle', 'bus', 'car',
                  'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
                  'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
         return table[label]
+
+    def convert2label_visdrone(self, label): #visdrone e kitti
+        # Your specific VisDrone-to-COCO mapping
+        coco_classes = {
+            0: 'pedestrian',
+            1: 'person', 
+            2: 'bicycle', 
+            3: 'car', 
+            4: 'van', 
+            5: 'truck'
+        }
+        
+        # Ensure the label is a standard Python int (in case it's a tensor)
+        label_int = int(label)
+        
+        # .get() safely returns 'unknown' if a stray ID slips through
+        return coco_classes.get(label_int, f'unknown_{label_int}')
+
+    def convert2label(self, label): #odvirat
+            # Ensure the label is a standard Python int
+            label_int = int(label)
+            
+            # Explicitly ignore label 0 (background)
+            if label_int == 0:
+                return None
+                
+            # Your specific mapping (background removed)
+            coco_classes = {
+                1: 'bike',
+                2: 'car', 
+                3: 'vehicle',
+                4: 'person', 
+            }
+            
+            # .get() safely returns 'unknown' if a stray ID slips through
+            return coco_classes.get(label_int, f'unknown_{label_int}')
         
     @torch.inference_mode()
     def calculate_cost(self):

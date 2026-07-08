@@ -76,20 +76,20 @@ images_per_sec = [
 colors_speed = [color_map[model] for model in speed_models]
 
 # 1. MAE GRAPH
-plt.figure(figsize=(6, 6))
+plt.figure(figsize=(6, 4))
 plt.bar(mae_models, mae_scores, color=colors_mae)
 plt.ylabel("MAE")
-plt.tick_params(axis="x", rotation=80)
+plt.xticks(rotation=35, ha='right')
 plt.grid(True, axis="y", alpha=0.3)
 plt.tight_layout()
 plt.savefig("model_comparisons_mae.png", dpi=300, bbox_inches="tight")
 plt.close()
 
 # 2. PEARSON CORRELATION GRAPH
-plt.figure(figsize=(6, 6))
+plt.figure(figsize=(6, 4))
 plt.bar(pearson_models, pearson_corr, color=colors_pearson)
 plt.ylabel("Pearson Correlation")
-plt.tick_params(axis="x", rotation=80)
+plt.xticks(rotation=35, ha='right')
 plt.grid(True, axis="y", alpha=0.3)
 plt.tight_layout()
 plt.savefig("model_comparisons_pearson.png", dpi=300, bbox_inches="tight")

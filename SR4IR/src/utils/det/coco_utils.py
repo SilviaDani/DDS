@@ -238,7 +238,96 @@ def get_coco(root, image_set, transforms, mode="instances", use_v2=False, with_m
 
     return dataset
 
+#new
+class ConvertVisDroneBboxToMask:
+    def __call__(self, image, anno):
+        w, h = image.size
+        # Create an empty mask
+        target = torch.zeros((h, w), dtype=torch.uint8)
+        
+        for obj in anno:
+            cat = obj["category_id"]
+            # COCO bbox format is [xmin, ymin, width, height]
+            x, y, bw, bh = map(int, obj["bbox"])
+            
+            # Define bounds (clamping to image size)
+            xmin, ymin = max(0, x), max(0, y)
+            xmax, ymax = min(w, x + bw), min(h, y + bh)
+            
+            # Fill the rectangular area with the category ID
+            target[ymin:ymax, xmin:xmax] = cat
+            
+        target = Image.fromarray(target.numpy())
+        return image, target
 
+def get_coco_visdrone(root, image_set, transforms, mode="instances", use_v2=False, with_masks=False, is_voc=False):
+    # 1. Update paths to match VisDrone folder names and your new JSON naming
+    # Assuming your unified file is named: instances_train.json / instances_val.json
+    anno_file_template = "{}_{}.json" 
+    
+    PATHS = {
+        "train": ("train", os.path.join("annotations", anno_file_template.format(mode, "train"))),
+        "val": ("val", os.path.join("annotations", anno_file_template.format(mode, "val"))),
+        #"test": ("test", os.path.join("annotations", anno_file_template.format(mode, "test"))),
+    }
+
+    img_folder, ann_file = PATHS[image_set]
+    img_folder = os.path.join(root, img_folder)
+    ann_file = os.path.join(root, ann_file)
+
+    if use_v2:
+        # V2 handles this internally with wrap_dataset_for_transforms_v2
+        from torchvision.datasets import wrap_dataset_for_transforms_v2
+        dataset = torchvision.datasets.CocoDetection(img_folder, ann_file, transforms=transforms)
+        target_keys = ["boxes", "labels", "image_id"]
+        dataset = wrap_dataset_for_transforms_v2(dataset, target_keys=target_keys)
+    else:
+        # V1 needs the manual dictionary conversion
+        t = [ConvertCocoToDetectionDict()] 
+        if transforms is not None:
+            t.append(transforms)
+        
+        dataset = torchvision.datasets.CocoDetection(
+            img_folder, 
+            ann_file, 
+            transforms=Compose(t)
+        )
+
+    if image_set == "train" and (not is_voc):
+        dataset = _coco_remove_images_without_annotations(dataset)
+
+    return dataset
+
+
+class ConvertCocoToDetectionDict:
+    def __call__(self, image, target):
+        if not target:
+            # If empty, we still need basic structure
+            return image, {
+                "boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros(0, dtype=torch.int64),
+                "image_id": torch.tensor([-1])
+            }
+
+        boxes = [obj["bbox"] for obj in target]
+        labels = [obj["category_id"] for obj in target]
+        
+        # FIX: Get the image_id as a plain Python int instead of a Tensor
+        # This prevents it from being moved to the GPU later
+        image_id = int(target[0]["image_id"])
+
+        new_boxes = []
+        for box in boxes:
+            x, y, w, h = box
+            new_boxes.append([x, y, x + w, y + h])
+            
+        target_dict = {
+            "boxes": torch.as_tensor(new_boxes, dtype=torch.float32).reshape(-1, 4),
+            "labels": torch.as_tensor(labels, dtype=torch.int64),
+            "image_id": image_id  # Pass as int
+        }
+        
+        return image, target_dict        
 class Compose:
     def __init__(self, transforms):
         self.transforms = transforms

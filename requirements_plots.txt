@@ -6,7 +6,7 @@ filetype
 tqdm
 imagecorruptions
 matplotlib
-"scikit-image<0.19"
+scikit-image<0.19
 pycocotools==2.0.6
 pandas
 seaborn

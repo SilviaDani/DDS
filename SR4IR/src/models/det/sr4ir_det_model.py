@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 import torch
+import math
 
 from archs import build_network
 from losses import build_loss
@@ -10,16 +11,14 @@ from utils.det import MetricLogger, SmoothedValue, get_coco_api_from_dataset, _g
 
 from .base_model import BaseModel
 
-import math
-
 def make_model(opt):
     return SR4IRDetectionModel(opt)
-
 
 class SR4IRDetectionModel(BaseModel):
     """Base Super-Resolution model for Object Detection."""
 
     def __init__(self, opt):
+        print("sr4ir_det_model.py Initializing SR4IRDetectionModel...")
         super().__init__(opt)
         
         # define network up
@@ -59,7 +58,7 @@ class SR4IRDetectionModel(BaseModel):
         if train_opt.get('tdp_opt'):
             # task driven perceptual loss
             self.cri_tdp = build_loss(train_opt['tdp_opt'], self.text_logger).to(self.device)
-            
+      
         # phase 2
         if train_opt.get('det_sr_opt'):
             self.cri_det_sr = build_loss(train_opt['det_sr_opt'], self.text_logger).to(self.device)
@@ -165,6 +164,13 @@ class SR4IRDetectionModel(BaseModel):
             target_list = [{k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in target_list]
             current_iter = iter + len(data_loader_train)*(epoch-1)
 
+            # for KITTI & VISDRONE <---
+            # Shift ground truth labels +1 because Faster R-CNN reserves 0 for background
+            # for t in target_list:
+            #     if 'labels' in t:
+            #         t['labels'] = t['labels'] + 1
+            #--------------------------------------------
+
             # make on-the-fly LR image
             img_hr_batch = self.list_to_batch(img_hr_list)
             img_lr_batch = quantize(interpolate(img_hr_batch, scale_factor=(1/self.scale), mode='bicubic'))
@@ -193,20 +199,20 @@ class SR4IRDetectionModel(BaseModel):
                 l_tdp = self.cri_tdp(feat_hr, feat_sr)
                 metric_logger.meters["l_tdp"].update(l_tdp.item())
                 
+                #wo pcgrad
+                self.tb_logger.add_scalar('losses/l_tdp', l_tdp.item(), current_iter)
+                l_total_sr += l_tdp
+                l_total_sr.backward()
                 # ===== PCGrad Start =====
                 # Get gradients for both losses
-                params_sr = [p for p in self.net_sr.parameters() if p.requires_grad]
-                grad_pix = self.get_gradients(l_pix, params_sr, retain_graph=True)
-                grad_tdp = self.get_gradients(l_tdp, params_sr, retain_graph=True)
-                
+                #params_sr = [p for p in self.net_sr.parameters() if p.requires_grad]
+                #grad_pix = self.get_gradients(l_pix, params_sr, retain_graph=True)
+                #grad_tdp = self.get_gradients(l_tdp, params_sr, retain_graph=True)
                 # Apply PCGrad to resolve conflicts
-                self.project_conflicting_gradients(grad_pix, grad_tdp, params_sr)
-                
-                # Manually trigger optimizer step (gradients already assigned)
-                self.optimizer_sr.step()
+                #self.project_conflicting_gradients(grad_pix, grad_tdp, params_sr)
                 # ===== PCGrad End =====
             else:
-                # Standard backward pass if no TDP loss
+                # Standard backward pass
                 l_total_sr.backward()
             self.optimizer_sr.step()
             
@@ -273,7 +279,7 @@ class SR4IRDetectionModel(BaseModel):
         for (img_hr_list, target_list), filename in metric_logger.log_every(data_loader_test, 1000, self.text_logger, header, return_filename=True):
             img_hr_list = list(img_hr.to(self.device) for img_hr in img_hr_list)
             target_list = [{k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in target_list]
-
+            
             # make on-the-fly LR image
             img_hr_batch = self.list_to_batch(img_hr_list)
             img_lr_batch = quantize(interpolate(img_hr_batch, scale_factor=(1/self.scale), mode='bicubic'))
@@ -286,6 +292,13 @@ class SR4IRDetectionModel(BaseModel):
             if torch.cuda.is_available(): torch.cuda.synchronize()
             outputs_sr, _ = self.net_det(img_sr_list)
             outputs_sr = [{k: v.to(torch.device("cpu")) for k, v in t.items()} for t in outputs_sr]
+
+            # for KITTI & VISDRONE <---
+            # Shift predicted labels -1 back to original dataset IDs for COCO eval
+            # for out in outputs_sr:
+            #     if 'labels' in out:
+            #         out['labels'] = out['labels'] - 1
+            #--------------------------------------------
 
             # visualizing tool
             if self.opt['test'].get('visualize', False): # and (num_processed_samples < 20):
@@ -318,16 +331,26 @@ class SR4IRDetectionModel(BaseModel):
         coco_evaluator.summarize(self.text_logger, tag='SR')
         return
 
-    def save(self, epoch):            
-        checkpoint = {"epoch": epoch,
-                      "opt": self.opt,
-                      "net_sr": self.get_bare_model(self.net_sr).state_dict(),
-                      "net_det": self.get_bare_model(self.net_det).state_dict(),
-                      'schedulers': [],
-                      }
+    def save(self, epoch):
+        # Create full checkpoint dictionary
+        checkpoint = {
+            "epoch": epoch,
+            "opt": self.opt,
+            "net_sr": self.get_bare_model(self.net_sr).state_dict(),
+            "net_det": self.get_bare_model(self.net_det).state_dict(),
+            "schedulers": [],
+            "optimizers": [] # Added optimizers list
+        }
+        
+        # Save Scheduler states
         for s in self.schedulers:
             checkpoint['schedulers'].append(s.state_dict())
+
+        # Save Optimizer states (CRITICAL FOR RESUMING)
+        for o in self.optimizers:
+            checkpoint['optimizers'].append(o.state_dict())
                 
+        # Save logic
         if epoch % self.opt['train']['save_freq'] == 0:
             save_on_master(self.get_bare_model(self.net_sr).state_dict(), osp.join(self.exp_dir, 'models', "net_sr_{:03d}.pth".format(epoch)))
             save_on_master(self.get_bare_model(self.net_det).state_dict(), osp.join(self.exp_dir, 'models', "net_det_{:03d}.pth".format(epoch)))
@@ -337,3 +360,37 @@ class SR4IRDetectionModel(BaseModel):
         save_on_master(self.get_bare_model(self.net_det).state_dict(), osp.join(self.exp_dir, 'models', "net_det_latest.pth"))
         save_on_master(checkpoint, osp.join(self.exp_dir, 'checkpoints', "checkpoint_latest.pth"))
         return
+
+    def resume_training(self, checkpoint_path):
+        """
+        Loads the entire training state (epoch, weights, optimizers, schedulers)
+        to resume exactly where you left off.
+        """
+        if not osp.exists(checkpoint_path):
+            print(f"No checkpoint found at {checkpoint_path}, starting from scratch.")
+            return 0  # Start from epoch 0
+
+        print(f"Resuming training from {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+
+        # 1. Load Model Weights
+        self.get_bare_model(self.net_sr).load_state_dict(checkpoint['net_sr'])
+        self.get_bare_model(self.net_det).load_state_dict(checkpoint['net_det'])
+
+        # 2. Load Optimizers (The Momentum)
+        if 'optimizers' in checkpoint:
+            for i, state in enumerate(checkpoint['optimizers']):
+                if i < len(self.optimizers):
+                    self.optimizers[i].load_state_dict(state)
+        
+        # 3. Load Schedulers (The Learning Rate)
+        if 'schedulers' in checkpoint:
+            for i, state in enumerate(checkpoint['schedulers']):
+                if i < len(self.schedulers):
+                    self.schedulers[i].load_state_dict(state)
+
+        # 4. Return the next epoch
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"Resuming successful. Starting from Epoch {start_epoch}")
+        
+        return start_epoch

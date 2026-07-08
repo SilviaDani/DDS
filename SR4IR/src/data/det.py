@@ -15,6 +15,8 @@ def load_det_data(opt):
         augmentations=opt['data'].get('data_augmentation', [])
     )
 
+    #transform_train = DetectionPresetTrain(crop_size=opt['data'].get('crop_size', 0))
+
     transform_test = DetectionPresetEval()
     
     # datasets

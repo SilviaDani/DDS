@@ -1,4 +1,4 @@
-name: 001_L2T_x4
+name: 001_L2T_x4_woPCGrad_30epochs_3warmup_visdrone
 model_type: lr_det
 num_threads: 16
 print_freq: 100  # unit: iter
@@ -12,14 +12,21 @@ data:
   path: datasets/VOC_COCO
   format: coco
   aspect_ratio_group_factor : 3
-  data_augmentation: hflip
+  data_augmentation:
+    - hflip
+    - photometric
+    - scale_jitter
+    - iou_crop
+    - zoomout
+    - shortest_size
   is_voc: true
 
 # network specs
 network_det:
   name: fasterrcnn_mobilenet_v3_large_fpn
   weights_backbone: MobileNet_V3_Large_Weights.IMAGENET1K_V1
-  num_classes: 21
+  #weights: DEFAULT
+  num_classes: 5 #od virat 5 #pascal 21
 
 # path for pretrained model
 path:
@@ -27,10 +34,10 @@ path:
 
 # training config
 train:  
-  batch_size: 16  # 1 GPU
+  batch_size: 8  # 1 GPU
   epoch: 30
   save_freq: 10  # unit: epoch
-  eval_freq: 5
+  eval_freq: 10
 
   # optimizer
   optim_det:
@@ -53,6 +60,7 @@ train:
 # testing config
 test:  
   batch_size: 1
+  calculate_lpips: True
 
 # DDP setting
 dist_url: env:://

@@ -11,8 +11,9 @@ import sys
 # Add the path to the DetectionDegradationScore directory
 sys.path.append('../DetectionDegradationScore')
 
-from ddsrnScorer import ddsrnFeatScorer, ddsrnFeatScorer_FasterRCNN
-
+from backbones import Backbone
+from extractor import load_feature_extractor, FeatureExtractor
+from ddsrn_agnostic_ACM import DDSRNFeatureLoss
 
 _reduction_modes = ['none', 'mean', 'sum']
 
@@ -164,32 +165,6 @@ class FeatureLoss(nn.Module):
             feature_loss = None
 
         return feature_loss
-
-class DDSLoss(ddsrnFeatScorer_FasterRCNN):
-    def __init__(self, model_path, backbone, device="cuda", loss_weight=1.0):
-        super().__init__(model_path, backbone, device)
-        self.loss_weight = loss_weight        
-
-    def forward(self, feats1, feats2):
-        """
-        Args:
-            feats1: Dict[str, Tensor] - Features from reference image
-            feats2: Dict[str, Tensor] - Features from degraded image
-
-        Returns:
-            similarity score (lower = more similar): Tensor [B] or scalar
-        """
-        base_forward = super(DDSLoss, self).forward  # Correctly fetch forward
-
-        if isinstance(feats1, list) and isinstance(feats2, list):
-            assert len(feats1) == len(feats2), "Feature lists must be of equal length"
-            losses = [base_forward(f1, f2) for f1, f2 in zip(feats1, feats2)]
-            loss = sum(losses) / len(losses)
-        else:
-            loss = base_forward(feats1, feats2)
-
-        return self.loss_weight * loss
-    
 
 class PerceptualLoss(nn.Module):
     """Perceptual loss with commonly used style loss.

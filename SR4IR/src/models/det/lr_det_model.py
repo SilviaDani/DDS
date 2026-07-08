@@ -90,6 +90,13 @@ class LRDetectionModel(BaseModel):
             img_hr_list = list(img_hr.to(self.device) for img_hr in img_hr_list)
             target_list = [{k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in target_list]
             
+            # # for KITTI & VISDRONE <---
+            # # Shift ground truth labels +1 because Faster R-CNN reserves 0 for background
+            # for t in target_list:
+            #     if 'labels' in t:
+            #         t['labels'] = t['labels'] + 1
+            # #--------------------------------------------
+
             # make on-the-fly LR image
             img_hr_batch = self.list_to_batch(img_hr_list)
             img_lr_batch = self.net_up(quantize(interpolate(img_hr_batch, scale_factor=(1/self.scale), mode='bicubic')))
@@ -150,6 +157,13 @@ class LRDetectionModel(BaseModel):
             outputs_lr, _ = self.net_det(img_lr_list)
             outputs_lr = [{k: v.to(torch.device("cpu")) for k, v in t.items()} for t in outputs_lr]
             
+            # # for KITTI & VISDRONE <---
+            # # Shift predicted labels -1 back to original dataset IDs for COCO eval
+            # for out in outputs_lr:
+            #     if 'labels' in out:
+            #         out['labels'] = out['labels'] - 1
+            # #--------------------------------------------
+
             # visualizing tool
             if self.opt['test'].get('visualize', False): # and num_processed_samples < 20:
                 self.visualize(img_lr_list[0], outputs_lr[0], filename)

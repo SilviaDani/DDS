@@ -86,6 +86,13 @@ class HRDetectionModel(BaseModel):
             img_hr_list = list(img_hr.to(self.device) for img_hr in img_hr_list)
             target_list = [{k: v.to(self.device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in target_list]
             
+            # # for KITTI & VISDRONE <---
+            # # Shift ground truth labels +1 because Faster R-CNN reserves 0 for background
+            # for t in target_list:
+            #     if 'labels' in t:
+            #         t['labels'] = t['labels'] + 1
+            # #--------------------------------------------
+
             # object detection
             _, loss_dict_hr = self.net_det(img_hr_list, target_list)
             
@@ -135,6 +142,13 @@ class HRDetectionModel(BaseModel):
             if torch.cuda.is_available(): torch.cuda.synchronize()
             outputs_hr, _ = self.net_det(img_hr_list)
             outputs_hr = [{k: v.to(torch.device("cpu")) for k, v in t.items()} for t in outputs_hr]
+            
+            # # for KITTI & VISDRONE <---
+            # # Shift predicted labels -1 back to original dataset IDs for COCO eval
+            # for out in outputs_hr:
+            #     if 'labels' in out:
+            #         out['labels'] = out['labels'] - 1
+            # #--------------------------------------------
             
             # visualizing tool
             if self.opt['test'].get('visualize', False): # and num_processed_samples < 20:

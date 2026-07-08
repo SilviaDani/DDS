@@ -67,7 +67,6 @@ class FeatureExtractor(ABC, nn.Module):
                 )
             layer.register_forward_hook(hook_fn(layer_index))
 
-    #@torch.no_grad()
     def forward(
         self, x: torch.Tensor
     ) -> Dict[int, torch.Tensor]:  # Return type is now always Dict[int, torch.Tensor]

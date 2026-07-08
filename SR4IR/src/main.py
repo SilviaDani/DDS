@@ -31,13 +31,20 @@ def main():
     # training
     if opt.get('train', False):
         model.init_training_settings(data_loader_train)
-        if opt.get('resume', False):
-            resume_epoch = model.resume_training(opt['resume'])
-            start_epoch, end_epoch = resume_epoch+1, opt['train']['epoch']
-        else:
-            start_epoch, end_epoch = 1, opt['train']['epoch']
         
-        model.text_logger.write("Start training")
+        # --- RESUME LOGIC FIXED ---
+        if opt.get('resume', False):
+            # We assume opt['resume'] contains the string path to the .pth file
+            # model.resume_training returns the NEXT epoch (e.g., 11)
+            start_epoch = model.resume_training(opt['resume'])
+            print (f"Resuming training from epoch {start_epoch}")
+            end_epoch = opt['train']['epoch']
+        else:
+            start_epoch = 1
+            end_epoch = opt['train']['epoch']
+        # --------------------------
+        
+        model.text_logger.write(f"Start training from epoch {start_epoch}")
         start_time = time.time()
         
         for epoch in range(start_epoch, end_epoch+1):
@@ -62,3 +69,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#CUDA_VISIBLE_DEVICES=0 python src/main.py -opt options/det/034_DDSFeat_SR4IR_swinir_x4.yml

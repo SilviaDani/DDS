@@ -1,10 +1,9 @@
-name: 034_SR4IR_swinir_x4_PCGrad_300epochs_3warmup_ECCV_L1only
-resume: /home/sdani/DDS/SR4IR/experiments/det/034_SR4IR_swinir_x4_PCGrad_300epochs_3warmup_ECCV_L1only_pt1/checkpoints/checkpoint_latest.pth
-model_type: sr4ir_det
+name: 044_SR4IR_swinir_x8_30epochs_3warmup_lambda1_ODVirat
+model_type: sr4ir_det_dds
 num_threads: 16
 print_freq: 100  # unit: iter
 manual_seed: 100
-scale: 4
+scale: 8
 deterministic: true
 # test_only: true
 
@@ -15,17 +14,17 @@ data:
   aspect_ratio_group_factor : 3
   data_augmentation:
     - hflip
-    # - photometric
-    # - scale_jitter
-    # - iou_crop
-    # - zoomout
-    # - shortest_size
+    - photometric
+    - scale_jitter
+    - iou_crop
+    - zoomout
+    - shortest_size
   is_voc: true
 
 # network specs
 network_sr:
   name: swinir
-  upscale: 4
+  upscale: 8
   in_chans: 3
   img_size: 48
   window_size: 8
@@ -40,18 +39,18 @@ network_det:
   name: fasterrcnn_mobilenet_v3_large_fpn
   weights_backbone: MobileNet_V3_Large_Weights.IMAGENET1K_V1
   #weights: DEFAULT
-  num_classes: 21 # odvirat 5 #pascal 21 # kitti visdrone 7
+  num_classes: 5 #odvirat 5 #pascal 21 # kitti visdrone 7
 
 # path for pretrained model
 path:
-  network_sr: experiments/pretrained_models/001_classicalSR_DIV2K_s48w8_SwinIR-M_x4.pth
+  network_sr: experiments/pretrained_models/001_classicalSR_DIV2K_s48w8_SwinIR-M_x8.pth
   network_sr_key: params
   network_seg: ~
 
 # training config
 train:  
-  batch_size: 1  # 8 GPU
-  epoch: 300
+  batch_size: 1  # 2 GPU
+  epoch: 30
   save_freq: 10  # unit: epoch
   eval_freq: 10
   warmup_epoch: 3
@@ -71,12 +70,12 @@ train:
   # scheduler
   scheduler_sr:
     type: CosineAnnealingRestartLR
-    periods: [3, 297]  # 3 for warmup
+    periods: [3, 27]  # 1 for warmup
     restart_weights: [1, 1]
     eta_min: !!float 1e-6
   scheduler_det:
     type: CosineAnnealingRestartLR
-    periods: [3, 297]  # 3 for warmup
+    periods: [3, 27]  # 1 for warmup
     restart_weights: [1, 1]
     eta_min: !!float 1e-6
 
@@ -85,14 +84,20 @@ train:
     type: L1Loss
     loss_weight: !!float 1.0
     reduction: mean
-  # tdp_opt:
+# tdp_opt:
   #   type: FeatureLoss
   #   loss_weight: !!float 1.0
   #   criterion: l1
   #   layer_weights:
   #     '0': 0.5
   #     '1': 0.5
-
+  
+  ddsrn_opt:
+    type: DDSRNFeatureLoss
+    loss_weight: !!float 1.0
+    model_path: "../DetectionDegradationScore/checkpoints/attemptAgnostic_Kitti_Visdrone_FPN_v1/best_model.pt"
+    device: "cuda"
+  
   # phase 2 losses
   det_sr_opt:
     type: DETLoss
