@@ -1,4 +1,5 @@
 yolo*.pt
+rtdet*.pt
 DetectionDegradationScore/VOC_C/
 DetectionDegradationScore/VOC2007_test/
 DetectionDegradationScore/progressive_distorted_dataset/
@@ -17,3 +18,11 @@ DetectionDegradationScore/create_distorted_dataset.py
 DetectionDegradationScore/checkpoints/
 DetectionDegradationScore/ddscores_analysis/
 VOC_test/
+SR4IR/experiments/
+SR4IR/src/losses/
+DDS/
+DetectionDegradationScore/
+small_pixels/
+RealESRGAN/
+fast-sr-unet/
+HVI-CIDNet/
